@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.CommandLine.Parsing;
+using System.Diagnostics;
 using Microsoft.DotNet.Cli;
 using Microsoft.DotNet.Cli.Utils;
 using Parser = Microsoft.DotNet.Cli.Parser;
@@ -56,6 +57,7 @@ namespace Microsoft.DotNet.Tools.Publish
 
         public static int Run(ParseResult parseResult)
         {
+            Debugger.Launch();
             parseResult.HandleDebugSwitch();
 
             return FromParseResult(parseResult).Execute();

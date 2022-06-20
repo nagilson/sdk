@@ -95,6 +95,7 @@ namespace Microsoft.DotNet.Tools.MSBuild
             else
             {
                 string[] arguments = _forwardingAppWithoutLogging.GetAllArguments();
+                arguments.Append<string>("-restore");
                 if (PerformanceLogEventSource.Log.IsEnabled())
                 {
                     PerformanceLogEventSource.Log.LogMSBuildStart(

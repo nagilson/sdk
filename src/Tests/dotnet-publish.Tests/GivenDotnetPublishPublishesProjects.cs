@@ -3,6 +3,7 @@
 
 using System;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using FluentAssertions;
 using Microsoft.DotNet.Cli.Utils;
@@ -263,22 +264,16 @@ namespace Microsoft.DotNet.Cli.Publish.Tests
                 .WithSource();
 
             var rootPath = testInstance.Path;
-
             var rid = selfContained ? EnvironmentInfo.GetCompatibleRid() : "";
             var ridArgs = selfContained ? $"-r {rid}".Split() : Array.Empty<string>();
 
-            new DotnetBuildCommand(Log, rootPath)
-                .Execute(ridArgs)
-                .Should()
-                .Pass();
-
-            new DotnetPublishCommand(Log, "--no-build")
+            var configuration = Environment.GetEnvironmentVariable("CONFIGURATION") ?? _expectedConfigurationDefault;
+            new DotnetPublishCommand(Log)
                 .WithWorkingDirectory(rootPath)
                 .Execute(ridArgs)
                 .Should()
                 .Pass();
 
-            var configuration = Environment.GetEnvironmentVariable("CONFIGURATION") ?? _expectedConfigurationDefault;
 
             var outputProgram = Path.Combine(rootPath, "bin", configuration, ToolsetInfo.CurrentTargetFramework, rid, "publish", $"TestAppSimple.dll");
 
