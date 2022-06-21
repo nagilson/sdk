@@ -268,6 +268,40 @@ namespace Microsoft.DotNet.Cli.Build.Tests
                .NotHaveStdOutContaining("NETSDK1031");
         }
 
+        [Fact]
+        public void It_builds_with_implicit_rid_with_publish_ready_to_run_option()
+        {
+            var testInstance = _testAssetsManager.CopyTestAsset("HelloWorld")
+                .WithSource()
+                .WithTargetFrameworkOrFrameworks("net6.0", false)
+                .Restore(Log);
+
+            new DotnetBuildCommand(Log)
+               .WithWorkingDirectory(testInstance.Path)
+               .Execute("-p:PublishReadyToRun=true")
+               .Should()
+               .Pass()
+               .And
+               .NotHaveStdOutContaining("NETSDK1031");
+        }
+
+        [Fact]
+        public void It_builds_with_implicit_rid_with_publish_single_file_option()
+        {
+            var testInstance = _testAssetsManager.CopyTestAsset("HelloWorld")
+                .WithSource()
+                .WithTargetFrameworkOrFrameworks("net6.0", false)
+                .Restore(Log);
+
+            new DotnetBuildCommand(Log)
+               .WithWorkingDirectory(testInstance.Path)
+               .Execute("-p:PublishSingleFile=true")
+               .Should()
+               .Pass()
+               .And
+               .NotHaveStdOutContaining("NETSDK1031");
+        }
+
         [Theory]
         [InlineData("roslyn3.9")]
         [InlineData("roslyn4.0")]
