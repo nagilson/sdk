@@ -302,6 +302,23 @@ namespace Microsoft.DotNet.Cli.Build.Tests
                .NotHaveStdOutContaining("NETSDK1031");
         }
 
+        [Fact]
+        public void It_builds_with_implicit_rid_no_args()
+        {
+            var testInstance = _testAssetsManager.CopyTestAsset("HelloWorld")
+                .WithSource()
+                .WithTargetFrameworkOrFrameworks("net6.0", false)
+                .Restore(Log);
+
+            new DotnetBuildCommand(Log)
+               .WithWorkingDirectory(testInstance.Path)
+               .Execute("")
+               .Should()
+               .Pass()
+               .And
+               .NotHaveStdOutContaining("NETSDK1031");
+        }
+
         [Theory]
         [InlineData("roslyn3.9")]
         [InlineData("roslyn4.0")]
