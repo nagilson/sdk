@@ -203,7 +203,7 @@ namespace Microsoft.DotNet.Cli.Build.Tests
                 TargetFrameworks = ToolsetInfo.CurrentTargetFramework,
             };
             testProject.AdditionalProperties["SelfContained"] = "true";
-            
+
             var testInstance = _testAssetsManager.CreateTestProject(testProject);
 
             new DotnetBuildCommand(Log)
@@ -279,6 +279,23 @@ namespace Microsoft.DotNet.Cli.Build.Tests
             new DotnetBuildCommand(Log)
                .WithWorkingDirectory(testInstance.Path)
                .Execute("-p:PublishReadyToRun=true")
+               .Should()
+               .Pass()
+               .And
+               .NotHaveStdOutContaining("NETSDK1031");
+        }
+
+        [Fact]
+        public void It_builds_with_implicit_rid_with_publish_AOT_option()
+        {
+            var testInstance = _testAssetsManager.CopyTestAsset("HelloWorld")
+                .WithSource()
+                .WithTargetFrameworkOrFrameworks("net6.0", false)
+                .Restore(Log);
+
+            new DotnetBuildCommand(Log)
+               .WithWorkingDirectory(testInstance.Path)
+               .Execute("-p:PublishAot=true")
                .Should()
                .Pass()
                .And
