@@ -1,6 +1,7 @@
 ﻿// Copyright (c) .NET Foundation and contributors. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
+using System;
 using System.CommandLine;
 using System.CommandLine.Parsing;
 using System.IO;
@@ -96,6 +97,9 @@ namespace Microsoft.DotNet.Workloads.Workload
                 ? parseResult.GetValueForOption(CommonOptions.VerbosityOption)
                 : parseResult.GetValueForOption(verbosityOptions);
 
+            var Info = parseResult.GetValueForOption(WorkloadInstallCommandParser.SkipManifestUpdateOption);
+            Console.WriteLine($"{Info}");
+            
             ILogger nugetLogger = Verbosity.VerbosityIsDetailedOrDiagnostic() ? new NuGetConsoleLogger() : new NullLogger();
 
             Reporter = reporter ?? Cli.Utils.Reporter.Output;

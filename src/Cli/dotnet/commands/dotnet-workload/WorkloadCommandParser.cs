@@ -5,6 +5,7 @@ using System;
 using System.CommandLine;
 using System.CommandLine.Invocation;
 using System.CommandLine.Parsing;
+using System.Runtime.CompilerServices;
 using LocalizableStrings = Microsoft.DotNet.Workloads.Workload.LocalizableStrings;
 
 namespace Microsoft.DotNet.Cli
@@ -14,6 +15,13 @@ namespace Microsoft.DotNet.Cli
         public static readonly string DocsLink = "https://aka.ms/dotnet-workload";
 
         private static readonly Command Command = ConstructCommand();
+
+        // Options
+        public static readonly Option<string> InfoOption =
+            new Option<string>("--info", LocalizableStrings.CommandDescription)
+            {
+                ArgumentHelpName = LocalizableStrings.CommandDescription
+            };
 
         public static Command GetCommand()
         {
@@ -33,9 +41,16 @@ namespace Microsoft.DotNet.Cli
             command.AddCommand(WorkloadRestoreCommandParser.GetCommand());
             command.AddCommand(WorkloadElevateCommandParser.GetCommand());
 
+            AddWorkloadBaseCommandOptions(command);
+
             command.SetHandler((parseResult) => parseResult.HandleMissingCommand());
 
             return command;
+        }
+
+        internal static void AddWorkloadBaseCommandOptions(Command command)
+        {
+            command.AddOption(InfoOption);
         }
     }
 }
