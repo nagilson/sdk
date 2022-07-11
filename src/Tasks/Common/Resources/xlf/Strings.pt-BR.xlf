@@ -464,9 +464,9 @@
         <target state="new">Optimizing assemblies for size. This process might take a while.</target>
         <note />
       </trans-unit>
-      <trans-unit id="ImplicitRuntimeIdentifierAcquisitionForPublishPropertyFailed">
-        <source>NETSDK1031: It is not supported to build or publish a self-contained application without specifying a RuntimeIdentifier. You must either specify a RuntimeIdentifier or set SelfContained to false.</source>
-        <target state="new">NETSDK1031: It is not supported to build or publish a self-contained application without specifying a RuntimeIdentifier. You must either specify a RuntimeIdentifier or set SelfContained to false.</target>
+      <trans-unit id="ImplicitRuntimeIdentifierResolutionForPublishPropertyFailed">
+        <source>NETSDK1187: The project specified a Publish property which relies on a specific Runtime Identifier. Automatic resolution of the runtime was attempted, but failed. This should never occur; as a work-around, try specifying a RID explicitly.</source>
+        <target state="new">NETSDK1187: The project specified a Publish property which relies on a specific Runtime Identifier. Automatic resolution of the runtime was attempted, but failed. This should never occur; as a work-around, try specifying a RID explicitly.</target>
         <note>{StrBegin="NETSDK1187: "}</note>
       </trans-unit>
       <trans-unit id="IncorrectPackageRoot">
