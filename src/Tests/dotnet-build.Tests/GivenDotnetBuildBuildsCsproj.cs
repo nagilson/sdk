@@ -274,7 +274,9 @@ namespace Microsoft.DotNet.Cli.Build.Tests
                .Should()
                .Pass()
                .And
-               .NotHaveStdOutContaining("NETSDK1031");
+               .NotHaveStdOutContaining("NETSDK1031") // Self Contained Checks
+               .And
+               .NotHaveStdErrContaining("NETSDK1187"); // Publish Properties Requiring RID Checks 
         }
 
         [Theory]
