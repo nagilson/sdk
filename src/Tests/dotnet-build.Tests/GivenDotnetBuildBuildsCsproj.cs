@@ -251,9 +251,18 @@ namespace Microsoft.DotNet.Cli.Build.Tests
                .NotHaveStdOutContaining("NETSDK1179");
         }
 
-        [Fact]
-        public void It_builds_with_implicit_rid_with_self_contained_option()
+        [Theory]
+        [InlineData("--self-contained")]
+        [InlineData("---p:PublishReadyToRun=true")]
+        [InlineData("-p:PublishSingleFile=true")]
+        [InlineData("-p:PublishAot=true")]
+        [InlineData("-p:PublishTrimmed=true")]
+        [InlineData("")]
+        public void It_builds_with_implicit_rid_with_rid_specific_properties(string executeOptionsAndProperties)
         {
+            // There are established errors in our MSBuild files which will trigger if the RID does not properly resolve 
+            // ... automatically when any of these are specified. 
+
             var testInstance = _testAssetsManager.CopyTestAsset("HelloWorld")
                 .WithSource()
                 .WithTargetFrameworkOrFrameworks("net6.0", false)
@@ -261,75 +270,7 @@ namespace Microsoft.DotNet.Cli.Build.Tests
 
             new DotnetBuildCommand(Log)
                .WithWorkingDirectory(testInstance.Path)
-               .Execute("--self-contained")
-               .Should()
-               .Pass()
-               .And
-               .NotHaveStdOutContaining("NETSDK1031");
-        }
-
-        [Fact]
-        public void It_builds_with_implicit_rid_with_publish_ready_to_run_option()
-        {
-            var testInstance = _testAssetsManager.CopyTestAsset("HelloWorld")
-                .WithSource()
-                .WithTargetFrameworkOrFrameworks("net6.0", false)
-                .Restore(Log);
-
-            new DotnetBuildCommand(Log)
-               .WithWorkingDirectory(testInstance.Path)
-               .Execute("-p:PublishReadyToRun=true")
-               .Should()
-               .Pass()
-               .And
-               .NotHaveStdOutContaining("NETSDK1031");
-        }
-
-        [Fact]
-        public void It_builds_with_implicit_rid_with_publish_AOT_option()
-        {
-            var testInstance = _testAssetsManager.CopyTestAsset("HelloWorld")
-                .WithSource()
-                .WithTargetFrameworkOrFrameworks("net6.0", false)
-                .Restore(Log);
-
-            new DotnetBuildCommand(Log)
-               .WithWorkingDirectory(testInstance.Path)
-               .Execute("-p:PublishAot=true")
-               .Should()
-               .Pass()
-               .And
-               .NotHaveStdOutContaining("NETSDK1031");
-        }
-
-        [Fact]
-        public void It_builds_with_implicit_rid_with_publish_single_file_option()
-        {
-            var testInstance = _testAssetsManager.CopyTestAsset("HelloWorld")
-                .WithSource()
-                .WithTargetFrameworkOrFrameworks("net6.0", false)
-                .Restore(Log);
-
-            new DotnetBuildCommand(Log)
-               .WithWorkingDirectory(testInstance.Path)
-               .Execute("-p:PublishSingleFile=true")
-               .Should()
-               .Pass()
-               .And
-               .NotHaveStdOutContaining("NETSDK1031");
-        }
-
-        [Fact]
-        public void It_builds_with_implicit_rid_no_args()
-        {
-            var testInstance = _testAssetsManager.CopyTestAsset("HelloWorld")
-                .WithSource()
-                .WithTargetFrameworkOrFrameworks("net6.0", false)
-                .Restore(Log);
-
-            new DotnetBuildCommand(Log)
-               .WithWorkingDirectory(testInstance.Path)
-               .Execute("")
+               .Execute(executeOptionsAndProperties)
                .Should()
                .Pass()
                .And
