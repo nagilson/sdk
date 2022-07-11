@@ -253,7 +253,7 @@ namespace Microsoft.DotNet.Cli.Build.Tests
 
         [Theory]
         [InlineData("--self-contained")]
-        [InlineData("---p:PublishReadyToRun=true")]
+        [InlineData("--p:PublishReadyToRun=true")]
         [InlineData("-p:PublishSingleFile=true")]
         [InlineData("-p:PublishAot=true")]
         [InlineData("-p:PublishTrimmed=true")]
