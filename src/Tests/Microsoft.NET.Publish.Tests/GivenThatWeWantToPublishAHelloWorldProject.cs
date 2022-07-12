@@ -721,6 +721,30 @@ public static class Program
                 .Pass();
         }
 
+        [Theory]
+        [InlineData("--p:PublishReadyToRun=true")]
+        [InlineData("-p:PublishSingleFile=true")]
+        [InlineData("-p:PublishTrimmed=true")]
+        [InlineData("")]
+        public void It_publishes_with_implicit_rid_with_rid_specific_properties(string executeOptionsAndProperties)
+        {
+            var testProject = new TestProject()
+            {
+                Name = "PublishImplicitRid",
+                TargetFrameworks = $"net472;{ToolsetInfo.CurrentTargetFramework}"
+            };
+            testProject.AdditionalProperties.Add("IsPublishable", "false");
+            var testAsset = _testAssetsManager.CreateTestProject(testProject);
+
+            var publishCommand = new PublishCommand(testAsset);
+            publishCommand
+               .Execute(executeOptionsAndProperties)
+               .Should()
+               .Pass()
+               .And
+               .NotHaveStdErrContaining("NETSDK1187"); // Publish Properties Requiring RID Checks 
+        }
+
         [Fact]
         public void IsPublishableIsRespectedWhenMultitargeting()
         {

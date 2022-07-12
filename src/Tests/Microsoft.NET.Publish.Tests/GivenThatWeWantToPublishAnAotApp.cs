@@ -341,6 +341,24 @@ namespace Microsoft.NET.Publish.Tests
             }
         }
 
+        [RequiresMSBuildVersionTheory("17.0.0.32901")]
+        [InlineData(LatestTfm)]
+        public void It_publishes_with_implicit_rid_with_NativeAotApp(string targetFramework)
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) || RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                var projectName = "ImplicitRidNativeAotApp";
+                var testProject = CreateHelloWorldTestProject(targetFramework, projectName, true);
+                testProject.AdditionalProperties["PublishAot"] = "true";
+                var testAsset = _testAssetsManager.CreateTestProject(testProject);
+
+                var publishCommand = new PublishCommand(Log, Path.Combine(testAsset.TestRoot, testProject.Name));
+                publishCommand
+                    .Execute()
+                    .Should().Pass();
+            }
+        }
+
         private TestProject CreateHelloWorldTestProject(string targetFramework, string projectName, bool isExecutable)
         {
             var testProject = new TestProject()

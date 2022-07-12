@@ -253,15 +253,13 @@ namespace Microsoft.DotNet.Cli.Build.Tests
 
         [Theory]
         [InlineData("--self-contained")]
-        [InlineData("--p:PublishReadyToRun=true")]
-        [InlineData("-p:PublishSingleFile=true")]
-        [InlineData("-p:PublishAot=true")]
         [InlineData("-p:PublishTrimmed=true")]
         [InlineData("")]
         public void It_builds_with_implicit_rid_with_rid_specific_properties(string executeOptionsAndProperties)
         {
-            // There are established errors in our MSBuild files which will trigger if the RID does not properly resolve 
+            // There are established errors in our MSBuild files which will trigger if the RID does not properly resolve ...
             // ... automatically when any of these are specified. 
+            // See It_Publishes_with_implicit_rid_etc for PublishAot.
 
             var testInstance = _testAssetsManager.CopyTestAsset("HelloWorld")
                 .WithSource()
@@ -270,13 +268,13 @@ namespace Microsoft.DotNet.Cli.Build.Tests
 
             new DotnetBuildCommand(Log)
                .WithWorkingDirectory(testInstance.Path)
-               .Execute(executeOptionsAndProperties)
+               .Execute(executeOptionsAndProperties, "-r", "win-x64")
                .Should()
                .Pass()
                .And
                .NotHaveStdOutContaining("NETSDK1031") // Self Contained Checks
                .And
-               .NotHaveStdErrContaining("NETSDK1187"); // Publish Properties Requiring RID Checks 
+               .NotHaveStdErrContaining("NETSDK1187"); // Check that publish properties don't interfere with build either (just picked one at random)
         }
 
         [Theory]
