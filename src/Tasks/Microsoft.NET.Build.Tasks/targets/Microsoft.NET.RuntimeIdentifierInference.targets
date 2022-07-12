@@ -155,7 +155,7 @@ Copyright (c) .NET Foundation. All rights reserved.
                  ResourceName="CannotHaveSelfContainedWithoutRuntimeIdentifier" />
 
     <NETSdkError Condition="('$(PublishAot)' == 'true' or '$(PublishSingleFile)' == 'true' or '$(PublishTrimmed)' == 'true' or '$(PublishReadyToRun)' == 'true') and '$(RuntimeIdentifier)' == ''"
-                 ResourceName="ImplicitRuntimeIdentifierAcquisitionForPublishPropertyFailed" />
+                 ResourceName="ImplicitRuntimeIdentifierResolutionForPublishPropertyFailed" />
 
     <NETSdkError Condition="'$(SelfContained)' == 'true' and '$(UseAppHost)' != 'true' and '$(_RuntimeIdentifierUsesAppHost)' == 'true'"
                  ResourceName="CannotUseSelfContainedWithoutAppHost" />
