@@ -268,7 +268,7 @@ namespace Microsoft.DotNet.Cli.Build.Tests
 
             new DotnetBuildCommand(Log)
                .WithWorkingDirectory(testInstance.Path)
-               .Execute(executeOptionsAndProperties, "-r", "win-x64")
+               .Execute(executeOptionsAndProperties)
                .Should()
                .Pass()
                .And
