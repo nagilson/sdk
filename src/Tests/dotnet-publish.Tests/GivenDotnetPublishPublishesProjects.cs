@@ -119,6 +119,21 @@ namespace Microsoft.DotNet.Cli.Publish.Tests
                      .And.HaveStdOutContaining("Hello World");
         }
 
+        [Fact]
+        public void ItPublishesSelfContainedWithPublishSelfContainedTrue()
+        {
+            var testAppName = "MSBuildTestPublishSelfContained";
+            var rid = EnvironmentInfo.GetCompatibleRid();
+            var outputDirectory = PublishApp(testAppName, rid, "-p:PublishSelfContained=true");
+
+            var outputProgram = Path.Combine(outputDirectory.FullName, $"{testAppName}{Constants.ExeSuffix}");
+
+            new RunExeCommand(Log, outputProgram)
+                .Execute()
+                .Should().Pass()
+                     .And.HaveStdOutContaining("Hello World");
+        }
+
         [Theory]
         [InlineData("--sc=false")]
         [InlineData("--self-contained=false")]
