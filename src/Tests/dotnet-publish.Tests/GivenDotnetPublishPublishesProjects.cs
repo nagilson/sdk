@@ -135,20 +135,27 @@ namespace Microsoft.DotNet.Cli.Publish.Tests
         }
 
         [Fact]
-        public void ItDoesNotPublishSelfContainedWithPublishSelfContainedFalse()
+        public void ItDoesNotBuildSelfContainedWithPublishSelfContainedTrue()
+        {
+            Assert.True(false);
+        }
+
+        [Fact]
+        public void PublishSelfContainedPropertyOverridesSelfContainProperty()
         {
             var testAppName = "MSBuildTestApp";
             var rid = EnvironmentInfo.GetCompatibleRid();
-            var outputDirectory = PublishApp(testAppName, rid, "-p:PublishSelfContained=false");
+            var outputDirectory = PublishApp(testAppName, rid, "--no-self-contained -p:PublishSelfContained=true");
 
             var outputProgram = Path.Combine(outputDirectory.FullName, $"{testAppName}{Constants.ExeSuffix}");
 
-            outputDirectory.Should().OnlyHaveFiles(new[] {
+            outputDirectory.Should().HaveFiles(new[] {
                 $"{testAppName}{Constants.ExeSuffix}",
                 $"{testAppName}.dll",
                 $"{testAppName}.pdb",
                 $"{testAppName}.deps.json",
                 $"{testAppName}.runtimeconfig.json",
+                "System.dll",
             });
 
             new RunExeCommand(Log, outputProgram)

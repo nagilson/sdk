@@ -22,8 +22,8 @@ Copyright (c) .NET Foundation. All rights reserved.
     <Platforms Condition=" '$(Platforms)' == '' ">AnyCPU</Platforms>
     <Configuration Condition=" '$(_IsPacking)' == 'true' and '$(PackRelease)' == 'true' and '$(Configuration)' == '' ">Release</Configuration>
     <Configuration Condition=" '$(_IsPublishing)' == 'true' and '$(PublishRelease)' == 'true' and '$(Configuration)' == '' ">Release</Configuration>
-    <SelfContained Condition=" '$(_IsPublishing)' == 'true' and '$(PublishSelfContained)' == 'true' and '$(SelfContained)' == '' ">true</SelfContained>
     <Configuration Condition="'$(Configuration)' == '' ">Debug</Configuration>
+    <SelfContained Condition=" '$(_IsPublishing)' == 'true' and '$(PublishSelfContained)' == 'true'">true</SelfContained>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
   </PropertyGroup>
 
