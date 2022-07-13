@@ -122,7 +122,7 @@ namespace Microsoft.DotNet.Cli.Publish.Tests
         [Fact]
         public void ItPublishesSelfContainedWithPublishSelfContainedTrue()
         {
-            var testAppName = "MSBuildTestPublishSelfContained";
+            var testAppName = "MSBuildTestApp";
             var rid = EnvironmentInfo.GetCompatibleRid();
             var outputDirectory = PublishApp(testAppName, rid, "-p:PublishSelfContained=true");
 
@@ -132,6 +132,28 @@ namespace Microsoft.DotNet.Cli.Publish.Tests
                 .Execute()
                 .Should().Pass()
                      .And.HaveStdOutContaining("Hello World");
+        }
+
+        [Fact]
+        public void ItDoesNotPublishSelfContainedWithPublishSelfContainedFalse()
+        {
+            var testAppName = "MSBuildTestApp";
+            var rid = EnvironmentInfo.GetCompatibleRid();
+            var outputDirectory = PublishApp(testAppName, rid, "-p:PublishSelfContained=false");
+
+            var outputProgram = Path.Combine(outputDirectory.FullName, $"{testAppName}{Constants.ExeSuffix}");
+
+            outputDirectory.Should().OnlyHaveFiles(new[] {
+                $"{testAppName}{Constants.ExeSuffix}",
+                $"{testAppName}.dll",
+                $"{testAppName}.pdb",
+                $"{testAppName}.deps.json",
+                $"{testAppName}.runtimeconfig.json",
+            });
+
+            new RunExeCommand(Log, outputProgram)
+                .Execute()
+                .Should().Pass();
         }
 
         [Theory]
