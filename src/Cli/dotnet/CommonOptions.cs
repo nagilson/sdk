@@ -267,7 +267,7 @@ namespace Microsoft.DotNet.Cli
 
         private static IEnumerable<string> ForwardSelfContainedOptions(bool isSelfContained, ParseResult parseResult)
         {
-            IEnumerable<string> selfContainedProperties = new string[] { $"-property:SelfContained={isSelfContained}", "-property:_CommandLineDefinedSelfContained=true" };
+            IEnumerable<string> selfContainedProperties = new string[] { $"-property:_UserDefinedSelfContained={isSelfContained}", "-property:_CommandLineDefinedSelfContained=true" };
 
             return selfContainedProperties;
         }
