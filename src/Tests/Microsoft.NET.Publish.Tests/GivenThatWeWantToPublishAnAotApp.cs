@@ -342,7 +342,7 @@ namespace Microsoft.NET.Publish.Tests
         }
 
         [RequiresMSBuildVersionTheory("17.0.0.32901")]
-        [InlineData(LatestTfm)]
+        [InlineData(ToolsetInfo.CurrentTargetFramework)]
         public void It_publishes_with_implicit_rid_with_NativeAotApp(string targetFramework)
         {
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) || RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
