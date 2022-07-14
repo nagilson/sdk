@@ -3,7 +3,9 @@
 
 using System;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Xml.Linq;
 using FluentAssertions;
 using Microsoft.DotNet.Cli.Utils;
 using Microsoft.DotNet.Tools;
@@ -128,16 +130,44 @@ namespace Microsoft.DotNet.Cli.Publish.Tests
 
             var outputProgram = Path.Combine(outputDirectory.FullName, $"{testAppName}{Constants.ExeSuffix}");
 
+            outputDirectory.Should().HaveFiles(new[] {
+                "System.dll", // File that should only exist if self contained 
+            });
+
             new RunExeCommand(Log, outputProgram)
                 .Execute()
                 .Should().Pass()
                      .And.HaveStdOutContaining("Hello World");
         }
 
-        [Fact]
-        public void ItDoesNotBuildSelfContainedWithPublishSelfContainedTrue()
+        [Theory]
+        [InlineData("net7.0")]
+        public void ItPublishesSelfContainedWithPublishSelfContainedProperty(string targetFramework)
         {
-            Assert.True(false);
+            var rid = EnvironmentInfo.GetCompatibleRid(targetFramework);
+            var testAsset = _testAssetsManager
+            .CopyTestAsset("HelloWorld", identifier: targetFramework)
+            .WithSource()
+            .WithTargetFramework(targetFramework)
+            .WithProjectChanges(project =>
+            {
+                var ns = project.Root.Name.Namespace;
+                var propertyGroup = project.Root.Elements(ns + "PropertyGroup").First();
+                propertyGroup.Add(new XElement(ns + "PublishSelfContained", "true"));
+            });
+
+            var publishCommand = new PublishCommand(testAsset);
+            var publishResult = publishCommand.Execute($"/p:RuntimeIdentifier={rid}");
+
+            publishResult.Should().Pass();
+
+            var publishDirectory = publishCommand.GetOutputDirectory(
+                targetFramework: targetFramework,
+                runtimeIdentifier: rid);
+            publishDirectory.Should().HaveFiles(new[] {
+                "HelloWorld.dll",
+                "System.dll"
+            });
         }
 
         [Fact]
@@ -155,7 +185,7 @@ namespace Microsoft.DotNet.Cli.Publish.Tests
                 $"{testAppName}.pdb",
                 $"{testAppName}.deps.json",
                 $"{testAppName}.runtimeconfig.json",
-                "System.dll",
+                "System.dll", // File that should only exist if self contained 
             });
 
             new RunExeCommand(Log, outputProgram)
