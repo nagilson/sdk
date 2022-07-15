@@ -23,7 +23,7 @@ Copyright (c) .NET Foundation. All rights reserved.
     <Configuration Condition=" '$(_IsPacking)' == 'true' and '$(PackRelease)' == 'true' and '$(Configuration)' == '' ">Release</Configuration>
     <Configuration Condition=" '$(_IsPublishing)' == 'true' and '$(PublishRelease)' == 'true' and '$(Configuration)' == '' ">Release</Configuration>
     <Configuration Condition="'$(Configuration)' == '' ">Debug</Configuration>
-    <SelfContained Condition="'$(_CommandLineDefinedSelfContained)' == 'true' and !('$(PublishSelfContained)' == 'true')">$(_UserDefinedSelfContainedValue)</SelfContained>
+    <SelfContained Condition="'$(_CommandLineDefinedSelfContained)' == 'true' and ('$(_IsPublishing)' == 'false' or !('$(PublishSelfContained)' == 'true'))">$(_UserDefinedSelfContainedValue)</SelfContained>
     <SelfContained Condition=" '$(_IsPublishing)' == 'true' and '$(PublishSelfContained)' == 'true'">true</SelfContained>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
   </PropertyGroup>
