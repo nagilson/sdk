@@ -64,7 +64,6 @@ Copyright (c) .NET Foundation. All rights reserved.
   <PropertyGroup Condition="'$(UseCurrentRuntimeIdentifier)' == 'true' or
                  (
                  '$(RuntimeIdentifier)' == '' and
-                 '@(_ThisProjectBuildMetadata->AnyHaveMetadataValue('IsRidAgnostic', 'true'))' and
                    (
                    '$(SelfContained)' == 'true' or
                    '$(PublishReadyToRun)' == 'true' or

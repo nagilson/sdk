@@ -122,7 +122,7 @@ namespace Microsoft.NET.Publish.Tests
             {
                 "/p:SelfContained=true",
                 $"/p:TargetFramework={ToolsetInfo.CurrentTargetFramework}",
-                $"/p:RuntimeIdentifier={EnvironmentInfo.GetCompatibleRid(ToolsetInfo.CurrentTargetFramework)}"
+                $"/p:RuntimeIdentifier={EnvironmentInfo.GetCompatibleRid(ToolsetInfo.CurrentTargetFramework)}",
             };
 
             new RestoreCommand(testAsset, "main").Execute(args);
@@ -230,9 +230,9 @@ namespace Microsoft.NET.Publish.Tests
         [RequiresMSBuildVersionFact("17.0.0.32901")]
         public void NoStaticLibs()
         {
-             var testAsset = _testAssetsManager
-                .CopyTestAsset(TestProjectName)
-                .WithSource();
+            var testAsset = _testAssetsManager
+               .CopyTestAsset(TestProjectName)
+               .WithSource();
 
             var publishCommand = new PublishCommand(testAsset);
             var tfm = ToolsetInfo.CurrentTargetFramework;

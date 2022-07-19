@@ -71,7 +71,7 @@ namespace Microsoft.DotNet.Cli.MSBuild.Tests
                 var command = BuildCommand.FromArgs(new string[] { "--arch", "arch", "--os", "os" }, msbuildPath);
                 command.GetArgumentsToMSBuild()
                     .Should()
-                    .StartWith($"{ExpectedPrefix} -restore -consoleloggerparameters:Summary -property:RuntimeIdentifier=os-arch -property:_UserDefinedSelfContainedValue=false");
+                    .StartWith($"{ExpectedPrefix} -restore -consoleloggerparameters:Summary -property:RuntimeIdentifier=os-arch -property:SelfContained=false");
             });
         }
 
