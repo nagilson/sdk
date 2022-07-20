@@ -61,9 +61,17 @@ Copyright (c) .NET Foundation. All rights reserved.
     <RuntimeIdentifier Condition="'$(PlatformTarget)' == 'x86' or '$(PlatformTarget)' == ''">win7-x86</RuntimeIdentifier>
   </PropertyGroup>
 
+  <!-- This depends on IsRidAgnostic in MSBuild. It may pull the RID out and we don't want to re-infer the RID if its removed.-->
+  <PropertyGroup>
+    <ProjectBuildMetadataExists>@(_ThisProjectBuildMetadata->Exists())</ProjectBuildMetadataExists>
+    <RidAgnostic>@(_ThisProjectBuildMetadata->AnyHaveMetadataValue('IsRidAgnostic', 'true'))</RidAgnostic>
+  </PropertyGroup>
+
+
   <PropertyGroup Condition="'$(UseCurrentRuntimeIdentifier)' == 'true' or
                  (
                  '$(RuntimeIdentifier)' == '' and
+                 '$(RidAgnostic)' != 'true' and
                    (
                    '$(SelfContained)' == 'true' or
                    '$(PublishReadyToRun)' == 'true' or

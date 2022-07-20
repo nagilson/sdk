@@ -731,10 +731,10 @@ public static class Program
             var testProject = new TestProject()
             {
                 Name = "PublishImplicitRid",
-                TargetFrameworks = $"net472;{ToolsetInfo.CurrentTargetFramework}"
+                TargetFrameworks = $"net472;{ToolsetInfo.CurrentTargetFramework}",
             };
             testProject.AdditionalProperties.Add("IsPublishable", "false");
-            var testAsset = _testAssetsManager.CreateTestProject(testProject);
+            var testAsset = _testAssetsManager.CreateTestProject(testProject, identifier: executeOptionsAndProperties);
 
             var publishCommand = new PublishCommand(testAsset);
             publishCommand
