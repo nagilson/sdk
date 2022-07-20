@@ -28,7 +28,7 @@ namespace Microsoft.NET.Publish.Tests
             {
                 Name = "WinformsBuildErrorFailTest",
                 TargetFrameworks = targetFramework,
-                IsWinExe=true
+                IsWinExe = true
             };
             testProject.AdditionalProperties["UseWindowsForms"] = "true";
             testProject.AdditionalProperties["PublishTrimmed"] = "true";

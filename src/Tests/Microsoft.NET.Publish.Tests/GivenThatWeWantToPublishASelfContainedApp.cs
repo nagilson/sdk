@@ -111,7 +111,9 @@ namespace Microsoft.NET.Publish.Tests
                 .Be(2);
         }
 
-        [Fact]
+        // TODO: This test should be fixed by the fixes in MSBuild here:
+        // Won't merge this code in until that has flown in, elsewise libraries which are rid agnostic will get rids.
+        [Fact(Skip = "https://github.com/dotnet/msbuild/pull/6924")]
         public void It_publishes_an_app_with_a_netcoreapp_lib_reference()
         {
             var testAsset = _testAssetsManager

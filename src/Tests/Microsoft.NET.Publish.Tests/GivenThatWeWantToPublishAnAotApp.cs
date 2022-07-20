@@ -131,10 +131,10 @@ namespace Microsoft.NET.Publish.Tests
                     .WithProjectChanges(project => AddRuntimeConfigOption(project));
 
                 var buildCommand = new BuildCommand(testAsset);
-                buildCommand.Execute()
+                buildCommand.Execute($"/p:RuntimeIdentifier={rid}")
                     .Should().Pass();
 
-                var outputDirectory = buildCommand.GetOutputDirectory(targetFramework).FullName;
+                var outputDirectory = buildCommand.GetOutputDirectory(targetFramework, runtimeIdentifier: rid).FullName;
                 var assemblyPath = Path.Combine(outputDirectory, $"{projectName}{Constants.ExeSuffix}");
                 var runtimeConfigPath = Path.Combine(outputDirectory, $"{projectName}.runtimeconfig.json");
                 var depsPath = Path.Combine(outputDirectory, $"{projectName}.deps.json");
