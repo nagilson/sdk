@@ -9,6 +9,16 @@ Copyright (c) .NET Foundation. All rights reserved.
 -->
 <Project ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 
+  <PropertyGroup Condition="'$(_IsPublishing)' == 'true' and '$(PublishRelease)' == 'true' and '$(_InferredDebugConfiguration)' == 'true'">
+    <Configuration>Release</Configuration>
+  </PropertyGroup>
+
+  <!-- Re-Evaluate DebugSymbols and Optimize because they are the two things that need to be refreshed with a configuration change.-->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release' and '$(PublishRelease)' == 'true' and '$(_InferredDebugConfiguration)' == 'true'">
+    <Optimize>true</Optimize>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+
   <Import Project="Microsoft.NET.Sdk.Common.targets" />
 
   <PropertyGroup>

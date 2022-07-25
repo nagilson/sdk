@@ -14,6 +14,7 @@ using System.Runtime.CompilerServices;
 using System;
 using Microsoft.Extensions.DependencyModel;
 using Xunit.Abstractions;
+using System.Linq;
 
 namespace Microsoft.NET.Publish.Tests
 {
@@ -442,6 +443,36 @@ public static class Program
 
             publishCommand
             .Execute()
+            .Should()
+            .Pass();
+
+            var expectedAssetPath = System.IO.Path.Combine(helloWorldAsset.Path, "bin", "Release", ToolsetInfo.CurrentTargetFramework, "HelloWorld.dll");
+            Assert.True(File.Exists(expectedAssetPath));
+        }
+
+        [Fact]
+        public void It_publishes_on_release_if_PublishRelease_property_set_in_csproj()
+        {
+            var helloWorldAsset = _testAssetsManager
+               .CopyTestAsset("HelloWorld", "PublishReleaseHelloWorldCsProj")
+               .WithSource()
+               .WithTargetFramework(ToolsetInfo.CurrentTargetFramework)
+               .WithProjectChanges(project =>
+               {
+                      var ns = project.Root.Name.Namespace;
+                      var propertyGroup = project.Root.Elements(ns + "PropertyGroup").First();
+                      propertyGroup.Add(new XElement(ns + "PublishRelease", "true"));
+               });
+
+            new BuildCommand(helloWorldAsset)
+           .Execute()
+           .Should()
+           .Pass();
+
+            var publishCommand = new DotnetPublishCommand(Log, helloWorldAsset.TestRoot);
+
+            publishCommand
+            .Execute("-bl:C:\\users\\noahgilson\\publishrelease.binlog")
             .Should()
             .Pass();
 

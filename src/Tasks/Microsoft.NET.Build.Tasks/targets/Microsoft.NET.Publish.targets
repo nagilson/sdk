@@ -34,8 +34,17 @@ Copyright (c) .NET Foundation. All rights reserved.
   <Import Project="Microsoft.NET.ClickOnce.targets" Condition="'$(PublishProtocol)' == 'ClickOnce'" />
 
   <PropertyGroup>
+    <_IsPublishing>true</_IsPublishing>
+  </PropertyGroup>
+
+  <PropertyGroup>
     <!-- We still need to resolve references even if we are not building during publish. -->
     <!-- BuildOnlySettings are required for RAR to find satellites and dependencies -->
+
+    
+    <!-- Reset the values dependent upon Configuration.-->
+    
+
     <_BeforePublishNoBuildTargets>
       BuildOnlySettings;
       _PreventProjectReferencesFromBuilding;
