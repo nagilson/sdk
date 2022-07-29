@@ -724,7 +724,6 @@ public static class Program
         [Theory]
         [InlineData("--p:PublishReadyToRun=true")]
         [InlineData("-p:PublishSingleFile=true")]
-        [InlineData("-p:PublishTrimmed=true")]
         [InlineData("")]
         public void It_publishes_with_implicit_rid_with_rid_specific_properties(string executeOptionsAndProperties)
         {

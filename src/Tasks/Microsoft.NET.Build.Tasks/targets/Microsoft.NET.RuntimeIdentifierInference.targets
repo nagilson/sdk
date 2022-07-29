@@ -69,7 +69,6 @@ Copyright (c) .NET Foundation. All rights reserved.
                    '$(SelfContained)' == 'true' or
                    '$(PublishReadyToRun)' == 'true' or
                    '$(PublishSingleFile)' == 'true' or
-                   '$(PublishTrimmed)' == 'true' or
                    '$(PublishAot)' == 'true' or
                    '$(PublishSelfContained)' == 'true'
                    )
@@ -170,7 +169,6 @@ Copyright (c) .NET Foundation. All rights reserved.
     (
     '$(PublishAot)' == 'true' or
     '$(PublishSingleFile)' == 'true' or
-    '$(PublishTrimmed)' == 'true' or
     '$(PublishReadyToRun)' == 'true' or
     '$(PublishSelfContained)' == 'true'
     ) and '$(RuntimeIdentifier)' == ''"
