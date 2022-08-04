@@ -465,9 +465,9 @@
         <note />
       </trans-unit>
       <trans-unit id="ImplicitRuntimeIdentifierResolutionForPublishPropertyFailed">
-        <source>NETSDK1187: The project specified a Publish property which relies on a specific Runtime Identifier. Automatic resolution of the runtime was attempted, but failed. This should never occur; as a work-around, try specifying a RID explicitly.</source>
-        <target state="new">NETSDK1187: The project specified a Publish property which relies on a specific Runtime Identifier. Automatic resolution of the runtime was attempted, but failed. This should never occur; as a work-around, try specifying a RID explicitly.</target>
-        <note>{StrBegin="NETSDK1187: "}</note>
+        <source>NETSDK1189: The project specified a Publish property which relies on a specific Runtime Identifier. Automatic resolution of the runtime was attempted, but failed. This should never occur; as a work-around, try specifying a RID explicitly.</source>
+        <target state="new">NETSDK1189: The project specified a Publish property which relies on a specific Runtime Identifier. Automatic resolution of the runtime was attempted, but failed. This should never occur; as a work-around, try specifying a RID explicitly.</target>
+        <note>{StrBegin="NETSDK1189: "}</note>
       </trans-unit>
       <trans-unit id="IncorrectPackageRoot">
         <source>NETSDK1020: Package Root {0} was incorrectly given for Resolved library {1}</source>
