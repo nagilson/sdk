@@ -138,7 +138,7 @@ namespace Microsoft.NET.Publish.Tests
         [WindowsOnlyFact]
         public void It_publishes_runtime_pack_resources()
         {
-            const string tfm = "netcoreapp3.0";
+            const string tfm = $"{ToolsetInfo.CurrentTargetFramework}-windows";
 
             var testProject = new TestProject()
             {
@@ -182,7 +182,7 @@ namespace Microsoft.NET.Publish.Tests
         [WindowsOnlyFact]
         public void It_publishes_runtime_pack_resources_for_specific_languages()
         {
-            const string tfm = "netcoreapp3.0";
+            const string tfm = $"{ToolsetInfo.CurrentTargetFramework}-windows";
 
             var testProject = new TestProject()
             {
