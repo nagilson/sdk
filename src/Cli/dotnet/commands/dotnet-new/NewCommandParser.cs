@@ -146,7 +146,7 @@ namespace Microsoft.DotNet.Cli
             }
         }
 
-        private static bool AddProjectReference(string projectPath, IReadOnlyList<string> projectsToAdd)
+        public static bool AddProjectReference(string projectPath, IReadOnlyList<string> projectsToAdd)
         {
             try
             {
