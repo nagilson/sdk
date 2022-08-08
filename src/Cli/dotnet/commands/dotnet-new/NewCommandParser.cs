@@ -38,7 +38,8 @@ namespace Microsoft.DotNet.Cli
 
         public static System.CommandLine.Command GetCommand()
         {
-            var getLogger = (ParseResult parseResult) => {
+            var getLogger = (ParseResult parseResult) =>
+            {
                 var sessionId = Environment.GetEnvironmentVariable(MSBuildForwardingApp.TelemetrySessionIdEnvironmentVariableName);
 
                 // senderCount: 0 to disable sender.
@@ -71,7 +72,8 @@ namespace Microsoft.DotNet.Cli
                 AddProjectsToSolution = AddProjectsToSolution
             };
 
-            var getEngineHost = (ParseResult parseResult) => {
+            var getEngineHost = (ParseResult parseResult) =>
+            {
                 var disableSdkTemplates = parseResult.GetValueForOption(_disableSdkTemplates);
                 return CreateHost(disableSdkTemplates);
             };
@@ -99,7 +101,7 @@ namespace Microsoft.DotNet.Cli
             builtIns.Add((typeof(ISdkInfoProvider), new SdkInfoProvider()));
 
             string preferredLangEnvVar = Environment.GetEnvironmentVariable("DOTNET_NEW_PREFERRED_LANG");
-            string preferredLang = string.IsNullOrWhiteSpace(preferredLangEnvVar)? "C#" : preferredLangEnvVar;
+            string preferredLang = string.IsNullOrWhiteSpace(preferredLangEnvVar) ? "C#" : preferredLangEnvVar;
 
             var preferences = new Dictionary<string, string>
             {
@@ -131,7 +133,7 @@ namespace Microsoft.DotNet.Cli
             try
             {
                 PathUtility.EnsureAllPathsExist(new[] { projectPath }, CommonLocalizableStrings.FileNotFound, allowDirectories: false);
-                IEnumerable<string> commandArgs = new [] { "add", projectPath, "package", packageName };
+                IEnumerable<string> commandArgs = new[] { "add", projectPath, "package", packageName };
                 if (!string.IsNullOrWhiteSpace(version))
                 {
                     commandArgs = commandArgs.Append(AddPackageParser.VersionOption.Aliases.First()).Append(version);
@@ -146,7 +148,7 @@ namespace Microsoft.DotNet.Cli
             }
         }
 
-        public static bool AddProjectReference(string projectPath, IReadOnlyList<string> projectsToAdd)
+        private static bool AddProjectReference(string projectPath, IReadOnlyList<string> projectsToAdd)
         {
             try
             {
