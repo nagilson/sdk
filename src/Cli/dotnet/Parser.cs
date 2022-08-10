@@ -156,7 +156,6 @@ namespace Microsoft.DotNet.Cli
             .UseParseDirective()
             .UseSuggestDirective()
             .DisablePosixBinding()
-            .EnableLegacyDoubleDashBehavior()
             .UseTokenReplacer(TokenPerLine)
             .Build();
 
@@ -301,6 +300,15 @@ namespace Microsoft.DotNet.Cli
                 {
                     new VSTestForwardingApp(helpArgs).Execute();
                 }
+                else if (command.Name.Equals(FormatCommandParser.GetCommand().Name))
+                {
+                    var argumetns = context.ParseResult.GetValueForArgument(FormatCommandParser.Arguments);
+                    new DotnetFormatForwardingApp(argumetns.Concat(helpArgs).ToArray()).Execute();
+                }
+                else if (command.Name.Equals(FsiCommandParser.GetCommand().Name))
+                {
+                    new FsiForwardingApp(helpArgs).Execute();
+                }
                 else if (command is Microsoft.TemplateEngine.Cli.Commands.ICustomHelp helpCommand)
                 {
                     var blocks = helpCommand.CustomHelpLayout();
@@ -312,6 +320,10 @@ namespace Microsoft.DotNet.Cli
                 else if (command.Name.Equals(FormatCommandParser.GetCommand().Name))
                 {
                     new DotnetFormatForwardingApp(helpArgs).Execute();
+                }
+                else if (command.Name.Equals(FsiCommandParser.GetCommand().Name))
+                {
+                    new FsiForwardingApp(helpArgs).Execute();
                 }
                 else
                 {
