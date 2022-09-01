@@ -80,6 +80,40 @@ namespace Microsoft.NET.Publish.Tests
 
         [RequiresMSBuildVersionTheory("17.0.0.32901")]
         [InlineData(ToolsetInfo.CurrentTargetFramework)]
+        public void NativeAot_hw_runs_with_no_warnings_when_PublishAot_is_false(string targetFramework)
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                var projectName = "HellowWorldNativeAotApp";
+                var rid = EnvironmentInfo.GetCompatibleRid(targetFramework);
+
+                var testProject = CreateHelloWorldTestProject(targetFramework, projectName, true);
+                testProject.AdditionalProperties["PublishAot"] = "false";
+                var testAsset = _testAssetsManager.CreateTestProject(testProject);
+
+                var publishCommand = new PublishCommand(Log, Path.Combine(testAsset.TestRoot, testProject.Name));
+                publishCommand
+                    .Execute($"/p:RuntimeIdentifier={rid}")
+                    .Should().Pass()
+                    .And.NotHaveStdOutContaining("IL2026")
+                    .And.NotHaveStdErrContaining("NETSDK1179")
+                    .And.NotHaveStdErrContaining("warning");
+
+                var publishDirectory = publishCommand.GetOutputDirectory(targetFramework: targetFramework, runtimeIdentifier: rid).FullName;
+                var publishedDll = Path.Combine(publishDirectory, $"{projectName}.dll");
+                var publishedExe = Path.Combine(publishDirectory, $"{testProject.Name}{Constants.ExeSuffix}");
+
+                // PublishAot=false will be a normal publish
+                File.Exists(publishedDll).Should().BeTrue();
+
+                var command = new RunExeCommand(Log, publishedExe)
+                    .Execute().Should().Pass()
+                    .And.HaveStdOutContaining("Hello World");
+            }
+        }
+
+        [RequiresMSBuildVersionTheory("17.0.0.32901")]
+        [InlineData(ToolsetInfo.CurrentTargetFramework)]
         public void NativeAot_app_runs_in_debug_with_no_config_when_PublishAot_is_enabled(string targetFramework)
         {
             // NativeAOT application publish directory should not contain any <App>.deps.json or <App>.runtimeconfig.json
@@ -238,14 +272,13 @@ namespace Microsoft.NET.Publish.Tests
                 testProject.AdditionalProperties["PublishAot"] = "true";
 
                 // This will add a reference to a package that will also be automatically imported by the SDK
-                testProject.PackageReferences.Add(new TestPackageReference("Microsoft.DotNet.ILCompiler", "7.0.0-*"));
+                testProject.PackageReferences.Add(new TestPackageReference("Microsoft.DotNet.ILCompiler", "7.0.0-rc.1.22416.1"));
 
                 // Linux symbol files are embedded and require additional steps to be stripped to a separate file
                 // assumes /bin (or /usr/bin) are in the PATH
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
                 {
                    testProject.AdditionalProperties["StripSymbols"] = "true";
-                   testProject.AdditionalProperties["ObjCopyName"] = "objcopy";
                 }
                 var testAsset = _testAssetsManager.CreateTestProject(testProject);
 
@@ -253,6 +286,11 @@ namespace Microsoft.NET.Publish.Tests
                 publishCommand
                     .Execute($"/p:RuntimeIdentifier={rid}")
                     .Should().Pass();
+                // Having an explicit package reference will generate a warning
+                // Comment back after the below issue is fixed
+                // https://github.com/dotnet/sdk/issues/27533
+                //.And.HaveStdOutContaining("warning")
+                //.And.HaveStdOutContaining("Microsoft.DotNet.ILCompiler");
 
                 var publishDirectory = publishCommand.GetOutputDirectory(targetFramework: targetFramework, runtimeIdentifier: rid).FullName;
                 var sharedLibSuffix = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".dll" : ".so";
@@ -271,6 +309,144 @@ namespace Microsoft.NET.Publish.Tests
                 var command = new RunExeCommand(Log, publishedExe)
                     .Execute().Should().Pass()
                     .And.HaveStdOutContaining("Hello World");
+            }
+        }
+
+        [RequiresMSBuildVersionTheory("17.0.0.32901")]
+        [InlineData(ToolsetInfo.CurrentTargetFramework)]
+        public void NativeAot_hw_runs_with_PackageReference_PublishAot_is_empty(string targetFramework)
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) || RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                var projectName = "HellowWorldNativeAotApp";
+                var rid = EnvironmentInfo.GetCompatibleRid(targetFramework);
+
+                var testProject = CreateHelloWorldTestProject(targetFramework, projectName, true);
+
+                // This will add a reference to a package that will also be automatically imported by the SDK
+                testProject.PackageReferences.Add(new TestPackageReference("Microsoft.DotNet.ILCompiler", "7.0.0-rc.1.22416.1"));
+
+                // Linux symbol files are embedded and require additional steps to be stripped to a separate file
+                // assumes /bin (or /usr/bin) are in the PATH
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                {
+                    testProject.AdditionalProperties["StripSymbols"] = "true";
+                }
+                var testAsset = _testAssetsManager.CreateTestProject(testProject);
+
+                var publishCommand = new PublishCommand(Log, Path.Combine(testAsset.TestRoot, testProject.Name));
+                publishCommand
+                    .Execute($"/p:RuntimeIdentifier={rid}")
+                    .Should().Pass();
+
+                var publishDirectory = publishCommand.GetOutputDirectory(targetFramework: targetFramework, runtimeIdentifier: rid).FullName;
+                var publishedDll = Path.Combine(publishDirectory, $"{projectName}.dll");
+                var publishedExe = Path.Combine(publishDirectory, $"{testProject.Name}{Constants.ExeSuffix}");
+
+                // Not setting PublishAot to true will be a normal publish
+                // Comment back after the below issue is fixed
+                // https://github.com/dotnet/sdk/issues/27533
+                // File.Exists(publishedDll).Should().BeTrue();
+
+                var command = new RunExeCommand(Log, publishedExe)
+                    .Execute().Should().Pass()
+                    .And.HaveStdOutContaining("Hello World");
+            }
+        }
+        
+        [RequiresMSBuildVersionTheory("17.0.0.32901")]
+        [InlineData(ToolsetInfo.CurrentTargetFramework)]
+        public void NativeAot_hw_runs_with_cross_target_PublishAot_is_enabled(string targetFramework)
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && (RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.X64))
+            {
+                var projectName = "HellowWorldNativeAotApp";
+                var rid = "win-arm64";
+
+                var testProject = CreateHelloWorldTestProject(targetFramework, projectName, true);
+                testProject.AdditionalProperties["PublishAot"] = "true";
+
+                var testAsset = _testAssetsManager.CreateTestProject(testProject);
+
+                var publishCommand = new PublishCommand(Log, Path.Combine(testAsset.TestRoot, testProject.Name));
+                publishCommand
+                    .Execute($"/p:RuntimeIdentifier={rid}")
+                    .Should().Pass();
+                var publishDirectory = publishCommand.GetOutputDirectory(targetFramework: targetFramework, runtimeIdentifier: rid).FullName;
+                var publishedDll = Path.Combine(publishDirectory, $"{projectName}.dll");
+                var publishedExe = Path.Combine(publishDirectory, $"{testProject.Name}{Constants.ExeSuffix}");
+                File.Exists(publishedDll).Should().BeFalse();
+                File.Exists(publishedExe).Should().BeTrue();
+
+            }
+        }
+
+
+        [RequiresMSBuildVersionTheory("17.0.0.32901")]
+        [InlineData(ToolsetInfo.CurrentTargetFramework)]
+        public void NativeAot_hw_runs_with_cross_PackageReference_PublishAot_is_enabled(string targetFramework)
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && (RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.X64))
+            {
+                var projectName = "HellowWorldNativeAotApp";
+                var rid = "win-arm64";
+
+                var testProject = CreateHelloWorldTestProject(targetFramework, projectName, true);
+                testProject.AdditionalProperties["PublishAot"] = "true";
+
+                // This will add a reference to a package that will also be automatically imported by the SDK
+                testProject.PackageReferences.Add(new TestPackageReference("Microsoft.DotNet.ILCompiler", "7.0.0-rc.1.22416.1"));
+                testProject.PackageReferences.Add(new TestPackageReference("runtime.win-x64.Microsoft.DotNet.ILCompiler", "7.0.0-rc.1.22416.1"));
+
+                var testAsset = _testAssetsManager.CreateTestProject(testProject);
+
+                var publishCommand = new PublishCommand(Log, Path.Combine(testAsset.TestRoot, testProject.Name));
+                publishCommand
+                    .Execute($"/p:RuntimeIdentifier={rid}")
+                    .Should().Pass();
+                // Having an explicit package reference will generate a warning
+                // Comment back after the below issue is fixed
+                // https://github.com/dotnet/sdk/issues/27533
+                //.And.HaveStdOutContaining("warning")
+                //.And.HaveStdOutContaining("Microsoft.DotNet.ILCompiler");
+
+                var publishDirectory = publishCommand.GetOutputDirectory(targetFramework: targetFramework, runtimeIdentifier: rid).FullName;
+                var publishedDll = Path.Combine(publishDirectory, $"{projectName}.dll");
+                var publishedExe = Path.Combine(publishDirectory, $"{testProject.Name}{Constants.ExeSuffix}");
+                File.Exists(publishedDll).Should().BeFalse();
+                File.Exists(publishedExe).Should().BeTrue();
+            }
+        }
+
+        [RequiresMSBuildVersionTheory("17.0.0.32901")]
+        [InlineData(ToolsetInfo.CurrentTargetFramework)]
+        public void NativeAot_hw_runs_with_cross_PackageReference_PublishAot_is_empty(string targetFramework)
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && (RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.X64))
+            {
+                var projectName = "HellowWorldNativeAotApp";
+                var rid = "win-arm64";
+
+                var testProject = CreateHelloWorldTestProject(targetFramework, projectName, true);
+
+                // This will add a reference to a package that will also be automatically imported by the SDK
+                testProject.PackageReferences.Add(new TestPackageReference("Microsoft.DotNet.ILCompiler", "7.0.0-rc.1.22416.1"));
+                testProject.PackageReferences.Add(new TestPackageReference("runtime.win-x64.Microsoft.DotNet.ILCompiler", "7.0.0-rc.1.22416.1"));
+
+                var testAsset = _testAssetsManager.CreateTestProject(testProject);
+
+                var publishCommand = new PublishCommand(Log, Path.Combine(testAsset.TestRoot, testProject.Name));
+                publishCommand
+                    .Execute($"/p:RuntimeIdentifier={rid}")
+                    .Should().Pass();
+
+                // Not setting PublishAot to true will be a normal publish
+                // Comment back after the below issue is fixed
+                // https://github.com/dotnet/sdk/issues/27533
+                var publishDirectory = publishCommand.GetOutputDirectory(targetFramework: targetFramework, runtimeIdentifier: rid).FullName;
+                var publishedDll = Path.Combine(publishDirectory, $"{projectName}.dll");
+                // File.Exists(publishedDll).Should().BeTrue();
+
             }
         }
 

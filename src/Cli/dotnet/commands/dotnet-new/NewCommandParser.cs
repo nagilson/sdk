@@ -6,28 +6,21 @@
 using System;
 using System.Collections.Generic;
 using System.CommandLine;
-using System.CommandLine.Parsing;
 using Microsoft.DotNet.Cli.Utils;
-using Microsoft.DotNet.Configurer;
-using Microsoft.DotNet.Tools.MSBuild;
 using Microsoft.DotNet.Tools.New;
-using Microsoft.DotNet.Tools.Restore;
 using Microsoft.TemplateEngine.Cli;
 using Microsoft.TemplateEngine.Abstractions;
 using Microsoft.TemplateEngine.Abstractions.TemplatePackage;
-using Microsoft.TemplateEngine.Edge;
-using System.Linq;
 using Microsoft.DotNet.Workloads.Workload.List;
 using Microsoft.TemplateEngine.Abstractions.Components;
-using Microsoft.DotNet.Tools.Add.PackageReference;
-using Microsoft.DotNet.Tools.Add.ProjectToProjectReference;
-using Microsoft.DotNet.Tools.Sln.Add;
-using Microsoft.DotNet.Tools;
-using Microsoft.DotNet.Tools.Common;
 using LocalizableStrings = Microsoft.DotNet.Tools.New.LocalizableStrings;
 using Microsoft.TemplateEngine.MSBuildEvaluation;
 using Microsoft.TemplateEngine.Abstractions.Constraints;
 using System.IO;
+using Microsoft.TemplateEngine.Cli.PostActionProcessors;
+using Microsoft.DotNet.Tools.New.PostActionProcessors;
+using Microsoft.TemplateEngine.Cli.Commands;
+using Command = System.CommandLine.Command;
 
 namespace Microsoft.DotNet.Cli
 {
@@ -35,93 +28,73 @@ namespace Microsoft.DotNet.Cli
     {
         public static readonly string DocsLink = "https://aka.ms/dotnet-new";
         public const string CommandName = "new";
-        private const string EnableProjectContextEvaluationEnvVar = "DOTNET_CLI_ENABLE_PROJECT_EVAL";
+        private const string EnableProjectContextEvaluationEnvVarName = "DOTNET_CLI_DISABLE_PROJECT_EVAL";
+        private const string PrefferedLangEnvVarName = "DOTNET_NEW_PREFERRED_LANG";
 
         private const string HostIdentifier = "dotnetcli";
-        private static readonly Option<bool> _disableSdkTemplates = new Option<bool>("--debug:disable-sdk-templates", () => false, LocalizableStrings.DisableSdkTemplates_OptionDescription).Hide();
+        
+        private static readonly Option<bool> s_disableSdkTemplatesOption = new Option<bool>(
+            "--debug:disable-sdk-templates",
+            () => false,
+            LocalizableStrings.DisableSdkTemplates_OptionDescription).Hide();
 
-        private static readonly Option<bool> _enableProjectContextEvaluation = new Option<bool>("--debug:enable-project-context", () => false, LocalizableStrings.EnableProjectContextEval_OptionDescription).Hide();
+        private static readonly Option<bool> s_disableProjectContextEvaluationOption = new Option<bool>(
+            "--debug:disable-project-context",
+            () => false,
+            LocalizableStrings.DisableProjectContextEval_OptionDescription).Hide();
 
-        internal static Option<FileInfo> ProjectPathOption { get; } = new Option<FileInfo>("--project", LocalizableStrings.ProjectPath_OptionDescription).ExistingOnly().Hide();
+        internal static readonly Command s_command = GetCommand();
 
-        internal static readonly System.CommandLine.Command Command = GetCommand();
-
-        public static System.CommandLine.Command GetCommand()
+        public static Command GetCommand()
         {
-            var getLogger = (ParseResult parseResult) => {
-                var sessionId = Environment.GetEnvironmentVariable(MSBuildForwardingApp.TelemetrySessionIdEnvironmentVariableName);
+            Command command = NewCommandFactory.Create(CommandName, (Func<ParseResult, CliTemplateEngineHost>)GetEngineHost);
 
-                // senderCount: 0 to disable sender.
-                // When senders in different process running at the same
-                // time they will read from the same global queue and cause
-                // sending duplicated events. Disable sender to reduce it.
-                var telemetry = new Microsoft.DotNet.Cli.Telemetry.Telemetry(new FirstTimeUseNoticeSentinel(),
-                                            sessionId,
-                                            senderCount: 0);
-                var logger = new TelemetryLogger(null);
-
-                if (telemetry.Enabled)
-                {
-                    logger = new TelemetryLogger((name, props, measures) =>
-                    {
-                        if (telemetry.Enabled)
-                        {
-                            telemetry.TrackEvent($"template/{name}", props, measures);
-                        }
-                    });
-                }
-                return logger;
-            };
-
-            var callbacks = new Microsoft.TemplateEngine.Cli.NewCommandCallbacks()
-            {
-                RestoreProject = RestoreProject,
-                AddPackageReference = AddPackageReference,
-                AddProjectReference = AddProjectReference,
-                AddProjectsToSolution = AddProjectsToSolution
-            };
-
-            var getEngineHost = (ParseResult parseResult) => {
-                bool disableSdkTemplates = parseResult.GetValueForOption(_disableSdkTemplates);
-                bool enableProjectContext = parseResult.GetValueForOption(_enableProjectContextEvaluation)
-                    || Env.GetEnvironmentVariableAsBool(EnableProjectContextEvaluationEnvVar);
-                FileInfo? projectPath = parseResult.GetValueForOption(ProjectPathOption);
-
-                //TODO: read and pass output directory
-                return CreateHost(disableSdkTemplates, enableProjectContext, projectPath);
-            };
-
-            var command = Microsoft.TemplateEngine.Cli.NewCommandFactory.Create(CommandName, getEngineHost, getLogger, callbacks);
-
-            // adding this option lets us look for its bound value during binding in a typed way
-            command.AddGlobalOption(_disableSdkTemplates);
-            command.AddGlobalOption(_enableProjectContextEvaluation);
-            command.AddGlobalOption(ProjectPathOption);
+            command.AddGlobalOption(s_disableSdkTemplatesOption);
+            command.AddGlobalOption(s_disableProjectContextEvaluationOption);
             return command;
+
+            static CliTemplateEngineHost GetEngineHost(ParseResult parseResult)
+            {
+                bool disableSdkTemplates = parseResult.GetValueForOption(s_disableSdkTemplatesOption);
+                bool disableProjectContext = parseResult.GetValueForOption(s_disableProjectContextEvaluationOption)
+                    || Env.GetEnvironmentVariableAsBool(EnableProjectContextEvaluationEnvVarName);
+                FileInfo? projectPath = parseResult.GetValueForOption(SharedOptions.ProjectPathOption);
+                FileInfo? outputPath = parseResult.GetValueForOption(SharedOptions.OutputOption);
+
+                return CreateHost(disableSdkTemplates, disableProjectContext, projectPath, outputPath);
+            }
         }
 
-        private static ITemplateEngineHost CreateHost(bool disableSdkTemplates, bool enableProjectContext, FileInfo? projectPath)
+        private static CliTemplateEngineHost CreateHost(bool disableSdkTemplates, bool disableProjectContext, FileInfo? projectPath, FileInfo? outputPath)
         {
             var builtIns = new List<(Type InterfaceType, IIdentifiedComponent Instance)>();
             builtIns.AddRange(Microsoft.TemplateEngine.Orchestrator.RunnableProjects.Components.AllComponents);
             builtIns.AddRange(Microsoft.TemplateEngine.Edge.Components.AllComponents);
             builtIns.AddRange(Microsoft.TemplateEngine.Cli.Components.AllComponents);
             builtIns.AddRange(Microsoft.TemplateSearch.Common.Components.AllComponents);
+
+            //post actions
+            builtIns.AddRange(new (Type, IIdentifiedComponent)[]
+            {
+                (typeof(IPostActionProcessor), new DotnetAddPostActionProcessor()),
+                (typeof(IPostActionProcessor), new DotnetSlnPostActionProcessor()),
+                (typeof(IPostActionProcessor), new DotnetRestorePostActionProcessor()),
+            });
             if (!disableSdkTemplates)
             {
                 builtIns.Add((typeof(ITemplatePackageProviderFactory), new BuiltInTemplatePackageProviderFactory()));
                 builtIns.Add((typeof(ITemplatePackageProviderFactory), new OptionalWorkloadProviderFactory()));
             }
-            if (enableProjectContext)
+            if (!disableProjectContext)
             {
                 builtIns.Add((typeof(IBindSymbolSource), new ProjectContextSymbolSource()));
                 builtIns.Add((typeof(ITemplateConstraintFactory), new ProjectCapabilityConstraintFactory()));
-                builtIns.Add((typeof(MSBuildEvaluator), new MSBuildEvaluator(outputDirectory: null, projectPath: projectPath?.FullName)));
+                builtIns.Add((typeof(MSBuildEvaluator), new MSBuildEvaluator(outputDirectory: outputPath?.FullName, projectPath: projectPath?.FullName)));
             }
             builtIns.Add((typeof(IWorkloadsInfoProvider), new WorkloadsInfoProvider(new WorkloadInfoHelper())));
             builtIns.Add((typeof(ISdkInfoProvider), new SdkInfoProvider()));
 
-            string? preferredLangEnvVar = Environment.GetEnvironmentVariable("DOTNET_NEW_PREFERRED_LANG");
+            string? preferredLangEnvVar = Environment.GetEnvironmentVariable(PrefferedLangEnvVarName);
             string preferredLang = string.IsNullOrWhiteSpace(preferredLangEnvVar)? "C#" : preferredLangEnvVar;
 
             var preferences = new Dictionary<string, string>
@@ -131,80 +104,14 @@ namespace Microsoft.DotNet.Cli
                 { "RuntimeFrameworkVersion", new Muxer().SharedFxVersion },
                 { "NetStandardImplicitPackageVersion", new FrameworkDependencyFile().GetNetStandardLibraryVersion() },
             };
-
-            return new DefaultTemplateEngineHost(HostIdentifier, "v" + Product.Version, preferences, builtIns);
-        }
-
-        private static bool RestoreProject(string pathToRestore)
-        {
-            try
-            {
-                PathUtility.EnsureAllPathsExist(new[] { pathToRestore }, CommonLocalizableStrings.FileNotFound, allowDirectories: true);
-                return RestoreCommand.Run(new string[] { pathToRestore }) == 0;
-            }
-            catch (Exception e)
-            {
-                Reporter.Error.WriteLine(string.Format(LocalizableStrings.RestoreCallback_Failed, e.Message));
-                return false;
-            }
-        }
-
-        private static bool AddPackageReference(string projectPath, string packageName, string? version)
-        {
-            try
-            {
-                PathUtility.EnsureAllPathsExist(new[] { projectPath }, CommonLocalizableStrings.FileNotFound, allowDirectories: false);
-                IEnumerable<string> commandArgs = new [] { "add", projectPath, "package", packageName };
-                if (!string.IsNullOrWhiteSpace(version))
-                {
-                    commandArgs = commandArgs.Append(AddPackageParser.VersionOption.Aliases.First()).Append(version);
-                }
-                var addPackageReferenceCommand = new AddPackageReferenceCommand(AddCommandParser.GetCommand().Parse(commandArgs.ToArray()));
-                return addPackageReferenceCommand.Execute() == 0;
-            }
-            catch (Exception e)
-            {
-                Reporter.Error.WriteLine(string.Format(LocalizableStrings.AddPackageReferenceCallback_Failed, e.Message));
-                return false;
-            }
-        }
-
-        private static bool AddProjectReference(string projectPath, IReadOnlyList<string> projectsToAdd)
-        {
-            try
-            {
-                PathUtility.EnsureAllPathsExist(new[] { projectPath }, CommonLocalizableStrings.FileNotFound, allowDirectories: false);
-                PathUtility.EnsureAllPathsExist(projectsToAdd, CommonLocalizableStrings.FileNotFound, allowDirectories: false);
-                IEnumerable<string> commandArgs = new[] { "add", projectPath, "reference", }.Concat(projectsToAdd);
-                var addProjectReferenceCommand = new AddProjectToProjectReferenceCommand(AddCommandParser.GetCommand().Parse(commandArgs.ToArray()));
-                return addProjectReferenceCommand.Execute() == 0;
-            }
-            catch (Exception e)
-            {
-                Reporter.Error.WriteLine(string.Format(LocalizableStrings.AddProjectReferenceCallback_Failed, e.Message));
-                return false;
-            }
-        }
-
-        private static bool AddProjectsToSolution(string solutionPath, IReadOnlyList<string> projectsToAdd, string? solutionFolder)
-        {
-            try
-            {
-                PathUtility.EnsureAllPathsExist(new[] { solutionPath }, CommonLocalizableStrings.FileNotFound, allowDirectories: false);
-                PathUtility.EnsureAllPathsExist(projectsToAdd, CommonLocalizableStrings.FileNotFound, allowDirectories: false);
-                IEnumerable<string> commandArgs = new[] { "sln", solutionPath, "add" }.Concat(projectsToAdd);
-                if (!string.IsNullOrWhiteSpace(solutionFolder))
-                {
-                    commandArgs = commandArgs.Append(SlnAddParser.SolutionFolderOption.Aliases.First()).Append(solutionFolder);
-                }
-                var addProjectToSolutionCommand = new AddProjectToSolutionCommand(SlnCommandParser.GetCommand().Parse(commandArgs.ToArray()));
-                return addProjectToSolutionCommand.Execute() == 0;
-            }
-            catch (Exception e)
-            {
-                Reporter.Error.WriteLine(string.Format(LocalizableStrings.AddProjectsToSolutionCallback_Failed, e.Message));
-                return false;
-            }
+            bool enableVerboseLogging = Reporter.IsVerbose;
+            return new CliTemplateEngineHost(
+                HostIdentifier,
+                "v" + Product.Version,
+                preferences,
+                builtIns,
+                outputPath: outputPath?.FullName,
+                enableVerboseLogging: enableVerboseLogging);
         }
     }
 }
