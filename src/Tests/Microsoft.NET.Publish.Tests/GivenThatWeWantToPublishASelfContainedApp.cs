@@ -111,6 +111,7 @@ namespace Microsoft.NET.Publish.Tests
                 .Be(2);
         }
 
+        [Fact]
         public void It_publishes_an_app_with_a_netcoreapp_lib_reference()
         {
             var testAsset = _testAssetsManager
