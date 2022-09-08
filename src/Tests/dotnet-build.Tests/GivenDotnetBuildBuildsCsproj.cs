@@ -258,10 +258,6 @@ namespace Microsoft.DotNet.Cli.Build.Tests
         [InlineData("")]
         public void It_builds_with_implicit_rid_with_rid_specific_properties(string executeOptionsAndProperties)
         {
-            // There are established errors in our MSBuild files which will trigger if the RID does not properly resolve ...
-            // ... automatically when any of these are specified. 
-            // See It_Publishes_with_implicit_rid_etc for PublishAot.
-
             var testInstance = _testAssetsManager.CopyTestAsset("HelloWorld")
                 .WithSource()
                 .WithTargetFrameworkOrFrameworks("net6.0", false)
@@ -275,7 +271,7 @@ namespace Microsoft.DotNet.Cli.Build.Tests
                .And
                .NotHaveStdOutContaining("NETSDK1031") // Self Contained Checks
                .And
-               .NotHaveStdErrContaining("NETSDK1187"); // Check that publish properties don't interfere with build either (just picked one at random)
+               .NotHaveStdErrContaining("NETSDK1191"); // Check that publish properties don't interfere with build either 
         }
 
         [RequiresMSBuildVersionFact("17.4.0.41702")]

@@ -741,7 +741,7 @@ public static class Program
                .Should()
                .Pass()
                .And
-               .NotHaveStdErrContaining("NETSDK1187"); // Publish Properties Requiring RID Checks 
+               .NotHaveStdErrContaining("NETSDK1191"); // Publish Properties Requiring RID Checks 
         }
 
         [Fact]
