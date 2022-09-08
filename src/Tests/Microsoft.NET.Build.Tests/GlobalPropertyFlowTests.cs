@@ -227,7 +227,7 @@ namespace Microsoft.NET.Build.Tests
 
             var arguments = GetDotnetArguments(passSelfContained, passRuntimeIdentifier);
 
-            if (passSelfContained || passRuntimeIdentifier)
+            if (passRuntimeIdentifier)
             {
                 new DotnetBuildCommand(Log, arguments.ToArray())
                     .WithWorkingDirectory(testAsset.TestRoot)

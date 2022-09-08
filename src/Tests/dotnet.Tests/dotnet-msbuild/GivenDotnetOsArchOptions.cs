@@ -171,7 +171,7 @@ namespace Microsoft.DotNet.Cli.MSBuild.Tests
                     .Should()
                     .StartWith($"{ExpectedPrefix} -restore -consoleloggerparameters:Summary " +
                     $"-property:RuntimeIdentifier=fake-rid -property:_CommandLineDefinedRuntimeIdentifier=true " +
-                    $"-property:_UserDefinedSelfContainedValue=True -property:_CommandLineDefinedSelfContained=true");
+                    $"-property:SelfContained=True -property:_CommandLineDefinedSelfContained=true");
             });
         }
     }
