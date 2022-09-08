@@ -84,7 +84,7 @@ namespace Microsoft.DotNet.Cli.MSBuild.Tests
                 var command = BuildCommand.FromArgs(new string[] { "--arch", "arch", "--os", "os", "--self-contained" }, msbuildPath);
                 command.GetArgumentsToMSBuild()
                     .Should()
-                    .StartWith($"{ExpectedPrefix} -restore -consoleloggerparameters:Summary -property:_UserDefinedSelfContainedValue=True -property:_CommandLineDefinedSelfContained=true -property:RuntimeIdentifier=os-arch");
+                    .StartWith($"{ExpectedPrefix} -restore -consoleloggerparameters:Summary -property:SelfContained=True -property:_CommandLineDefinedSelfContained=true -property:RuntimeIdentifier=os-arch");
             });
         }
 
@@ -155,7 +155,7 @@ namespace Microsoft.DotNet.Cli.MSBuild.Tests
                 command.GetArgumentsToMSBuild()
                     .Should()
                     .StartWith($"{ExpectedPrefix} -restore -consoleloggerparameters:Summary " +
-                    $"-property:_UserDefinedSelfContainedValue=True -property:_CommandLineDefinedSelfContained=true");
+                    $"-property:SelfContained=True -property:_CommandLineDefinedSelfContained=true");
             });
         }
 
