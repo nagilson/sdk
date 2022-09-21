@@ -100,6 +100,23 @@ namespace Microsoft.DotNet.Cli.Publish.Tests
         }
 
         [Theory]
+        [InlineData("-property   Configuration=Debug")]
+        [InlineData("-p    Configuration=Debug")]
+        public void ItParsesSpacedPropertiesInPublishReleaseEvaluationPhase(string propertyArg)
+        {
+            var testInstance = _testAssetsManager.CopyTestAsset("TestAppSimple")
+                .WithSource()
+                .Restore(Log);
+
+            var rootDir = testInstance.Path;
+
+            new DotnetPublishCommand(Log)
+                .WithWorkingDirectory(rootDir)
+                .Execute(propertyArg)
+                .Should().Pass().And.NotHaveStdErr();
+        }
+
+        [Theory]
         [InlineData(null)]
         [InlineData("--sc")]
         [InlineData("--self-contained")]
