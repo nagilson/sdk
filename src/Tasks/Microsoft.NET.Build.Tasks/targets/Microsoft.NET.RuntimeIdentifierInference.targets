@@ -72,7 +72,7 @@ Copyright (c) .NET Foundation. All rights reserved.
                     '$(PublishReadyToRun)' == 'true' or
                     '$(PublishSingleFile)' == 'true' or
                     '$(PublishAot)' == 'true' or
-                    ('$(_IsPublishing)' == 'true' and '$(PublishSelfContained)' == 'true')
+                    ('$(_CommandLineDefinedSelfContained)' != 'true' and '$(_IsPublishing)' == 'true' and '$(PublishSelfContained)' == 'true')
                   )">true</UseCurrentRuntimeIdentifier>
   </PropertyGroup>
 
@@ -231,7 +231,7 @@ Copyright (c) .NET Foundation. All rights reserved.
                     ResourceName="Prefer32BitIgnoredForNetCoreApp" />
 
     <PropertyGroup>
-          <Prefer32Bit>false</Prefer32Bit>
+      <Prefer32Bit>false</Prefer32Bit>
     </PropertyGroup>
 
   </Target>
@@ -243,7 +243,7 @@ Copyright (c) .NET Foundation. All rights reserved.
     <NETSdkError Condition="'$(PlatformTarget)' != 'AnyCPU' and !$(RuntimeIdentifier.ToUpperInvariant().Contains($(PlatformTarget.ToUpperInvariant())))"
                  ResourceName="CannotHaveRuntimeIdentifierPlatformMismatchPlatformTarget"
                  FormatArguments="$(RuntimeIdentifier);$(PlatformTarget)" />
-    
+
   </Target>
 
   <Target Name="_CheckForLanguageAndFeatureCombinationSupport"
