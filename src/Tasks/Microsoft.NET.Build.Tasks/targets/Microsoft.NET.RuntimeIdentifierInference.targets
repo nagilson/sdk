@@ -74,9 +74,9 @@ Copyright (c) .NET Foundation. All rights reserved.
                  '$(IsRidAgnostic)' != 'true' and
                   (
                     '$(SelfContained)' == 'true' or
-                    '$(PublishReadyToRun)' == 'true' or
-                    '$(PublishSingleFile)' == 'true' or
-                    '$(PublishAot)' == 'true'
+                    ('$(_IsPublishing)' == 'true' and '$(PublishReadyToRun)' == 'true') or
+                    ('$(_IsPublishing)' == 'true' and '$(PublishSingleFile)' == 'true') or
+                    ('$(_IsPublishing)' == 'true' and '$(PublishAot)' == 'true')
                   )">true</UseCurrentRuntimeIdentifier>
   </PropertyGroup>
 
@@ -87,7 +87,7 @@ Copyright (c) .NET Foundation. All rights reserved.
   <PropertyGroup Condition="'$(_IsPublishing)' == 'true' and '$(PublishRuntimeIdentifier)' != ''">
     <RuntimeIdentifier>$(PublishRuntimeIdentifier)</RuntimeIdentifier>
   </PropertyGroup>
-  
+
   <PropertyGroup Condition="'$(PlatformTarget)' == ''">
     <_UsingDefaultPlatformTarget>true</_UsingDefaultPlatformTarget>
   </PropertyGroup>
