@@ -29,6 +29,10 @@ namespace Microsoft.DotNet.Workloads.Workload
                 return AuthentiCode.IsSigned(path) &&
                     AuthentiCode.IsSignedByTrustedOrganization(path, AuthentiCode.TrustedOrganizations);
             }
+            else if(OperatingSystem.IsLinux())
+            {
+                return true; // need to implement this logic, will never be true inside of dogfood but this is needed to verify nugets part works
+            }
 
             return false;
         }
