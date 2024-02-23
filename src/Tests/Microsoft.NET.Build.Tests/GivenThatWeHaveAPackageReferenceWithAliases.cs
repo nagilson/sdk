@@ -93,7 +93,8 @@ namespace Microsoft.NET.Build.Tests
                 .Pass();
         }
 
-        [RequiresMSBuildVersionFact("16.8.0")]
+        //[RequiresMSBuildVersionFact("16.8.0")] // Re-enable this once skip is done.
+        [Fact(Skip = "https://github.com/dotnet/sdk/pull/38973")]
         public void CanBuildProjectWithAPackageReferenceWithMultipleAliases()
         {
             var targetFramework = ToolsetInfo.CurrentTargetFramework;
