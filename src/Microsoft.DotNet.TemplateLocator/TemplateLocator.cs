@@ -40,6 +40,14 @@ namespace Microsoft.DotNet.TemplateLocator
             string dotnetRootPath,
             string? userProfileDir)
         {
+
+            var logFile = Path.Combine(dotnetRootPath, "UserLog.txt");
+            File.Create(logFile);
+            Console.WriteLine($"PATH of LOG: ${logFile}", ConsoleColor.Magenta);
+            if (logFile != null) { File.AppendAllText(logFile, $"SDK VERSION {sdkVersion}"); }
+            if (logFile != null) { File.AppendAllText(logFile, $"ROOT PATH {dotnetRootPath}"); }
+            if (logFile != null) { File.AppendAllText(logFile, $"PROFILE DIR {userProfileDir}"); }
+
             if (string.IsNullOrWhiteSpace(sdkVersion))
             {
                 throw new ArgumentException($"'{nameof(sdkVersion)}' cannot be null or whitespace", nameof(sdkVersion));
@@ -56,11 +64,22 @@ namespace Microsoft.DotNet.TemplateLocator
             //  need to update this interface to pass a folder where we should start the search for global.json
             string? globalJsonPath = SdkDirectoryWorkloadManifestProvider.GetGlobalJsonPath(Environment.CurrentDirectory);
 
+            if (logFile != null) { File.AppendAllText(logFile, $"GLOBAL JSON PATH {globalJsonPath}"); }
+
+
             _workloadManifestProvider ??= new SdkDirectoryWorkloadManifestProvider(dotnetRootPath, sdkVersion, userProfileDir, globalJsonPath);
             _workloadResolver ??= WorkloadResolver.Create(_workloadManifestProvider, dotnetRootPath, sdkVersion, userProfileDir);
 
-            return _workloadResolver.GetInstalledWorkloadPacksOfKind(WorkloadPackKind.Template)
-                .Select(pack => new OptionalSdkTemplatePackageInfo(pack.Id, pack.Version, pack.Path)).ToList();
+            var packs = _workloadResolver.GetInstalledWorkloadPacksOfKind(WorkloadPackKind.Template);
+
+            if (logFile != null) { File.AppendAllText(logFile, $"PACKS {packs}"); }
+
+
+            var selectedPacks = packs.Select(pack => new OptionalSdkTemplatePackageInfo(pack.Id, pack.Version, pack.Path)).ToList();
+
+            if (logFile != null) { File.AppendAllText(logFile, $"SELECTED PACKS {packs}"); }
+
+            return selectedPacks;
         }
 
         public bool TryGetDotnetSdkVersionUsedInVs(string vsVersion, out string? sdkVersion)
