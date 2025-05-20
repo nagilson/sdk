@@ -68,7 +68,7 @@ internal static class ToolInstallCommandParser
 
     public static readonly Option<bool> RollForwardOption = new("--allow-roll-forward")
     {
-        Description = CliCommandStrings.RollForwardOptionDescription,
+        Description = CliCommandStrings.ToolInstallRollForwardOptionDescription,
         Arity = ArgumentArity.Zero
     };
 
@@ -79,6 +79,10 @@ internal static class ToolInstallCommandParser
     public static readonly Option<string> ToolPathOption = ToolAppliedOption.ToolPathOption;
 
     public static readonly Option<string> ToolManifestOption = ToolAppliedOption.ToolManifestOption;
+
+    public static readonly Option<bool> ForceOption = new Option<bool>(
+        "--force",
+        description: "Force install the tool even if runtime compatibility checks fail");
 
     private static readonly Command Command = ConstructCommand();
 
@@ -98,6 +102,7 @@ internal static class ToolInstallCommandParser
         command.Options.Add(CreateManifestIfNeededOption);
         command.Options.Add(AllowPackageDowngradeOption);
         command.Options.Add(RollForwardOption);
+        command.Options.Add(ForceOption);
 
         command.SetAction((parseResult) => new ToolInstallCommand(parseResult).Execute());
 

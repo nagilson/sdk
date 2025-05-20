@@ -18,7 +18,8 @@ internal interface IToolPackageDownloader
         bool isGlobalTool = false,
         bool isGlobalToolRollForward = false,
         bool verifySignatures = true,
-        RestoreActionConfig restoreActionConfig = null
+        RestoreActionConfig restoreActionConfig = null,
+        bool force = false
     );
 
     NuGetVersion GetNuGetVersion(

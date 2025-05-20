@@ -154,44 +154,51 @@ internal class ToolInstallGlobalOrToolPathCommand : CommandBase
 
         VersionRange versionRange = _parseResult.GetVersionRange();
 
-        (IToolPackageStore toolPackageStore,
-         IToolPackageStoreQuery toolPackageStoreQuery,
-         IToolPackageDownloader toolPackageDownloader,
-         IToolPackageUninstaller toolPackageUninstaller) = _createToolPackageStoreDownloaderUninstaller(toolPath, _forwardRestoreArguments, _currentWorkingDirectory);
-
-        var appHostSourceDirectory = ShellShimTemplateFinder.GetDefaultAppHostSourceDirectory();
-        IShellShimRepository shellShimRepository = _createShellShimRepository(appHostSourceDirectory, toolPath);
-
-        IToolPackage oldPackageNullable = GetOldPackage(toolPackageStoreQuery, packageId);
-
-        if (oldPackageNullable != null)
+        FilePath? configFile = null;
+        if (!string.IsNullOrEmpty(_configFilePath))
         {
-            NuGetVersion nugetVersion = GetBestMatchNugetVersion(packageId, versionRange, toolPackageDownloader);
-
-            if (ToolVersionAlreadyInstalled(oldPackageNullable, nugetVersion))
-            {
-                _reporter.WriteLine(string.Format(CliCommandStrings.ToolAlreadyInstalled, oldPackageNullable.Id, oldPackageNullable.Version.ToNormalizedString()).Green());
-                return 0;
-            }   
+            configFile = new FilePath(_configFilePath);
         }
 
         using (var scope = new TransactionScope(
             TransactionScopeOption.Required,
-            TimeSpan.Zero))
+            TimeSpan.FromSeconds(TransactionTimeoutSeconds)))
         {
-            if (oldPackageNullable != null)
+            var (store, storeQuery, toolPackageDownloader, toolPackageUninstaller) =
+                _createToolPackageStoreDownloaderUninstaller(toolPath);
+
+            var shellShimRepository = new ShellShimRepository(
+                store.Root,
+                _shellShimTemplateFinder);
+
+            IToolPackage oldPackageNullable = null;
+            try
             {
-                RunWithHandlingUninstallError(() =>
-                {
-                    shellShimRepository.RemoveShim(oldPackageNullable.Command.Name);
-                    toolPackageUninstaller.Uninstall(oldPackageNullable.PackageDirectory);
-                }, packageId);
+                oldPackageNullable = storeQuery.EnumeratePackageVersions(packageId).SingleOrDefault();
+            }
+            catch (InvalidOperationException)
+            {
+                throw new GracefulException(
+                    string.Format(
+                        CliCommandStrings.ToolInstallInvalidInstalledPackage,
+                        packageId));
+            }
+
+            NuGetVersion nuGetVersion = GetBestMatchNugetVersion(packageId, versionRange, toolPackageDownloader);
+
+            if (ToolVersionAlreadyInstalled(oldPackageNullable, nuGetVersion))
+            {
+                _reporter.WriteLine(string.Format(CliCommandStrings.ToolInstallPackageVersionIsSameAsInstalled,
+                    packageId,
+                    nuGetVersion.ToNormalizedString()).Green());
+                return 0;
             }
 
             RunWithHandlingInstallError(() =>
             {
+                bool force = _parseResult.GetValue(ToolInstallCommandParser.ForceOption);
                 IToolPackage newInstalledPackage = toolPackageDownloader.InstallPackage(
-                new PackageLocation(nugetConfig: GetConfigFile(), sourceFeedOverrides: _source, additionalFeeds: _addSource),
+                    new PackageLocation(nugetConfig: GetConfigFile(), sourceFeedOverrides: _source, additionalFeeds: _addSource),
                     packageId: packageId,
                     versionRange: versionRange,
                     targetFramework: _framework,
@@ -199,7 +206,8 @@ internal class ToolInstallGlobalOrToolPathCommand : CommandBase
                     isGlobalTool: true,
                     isGlobalToolRollForward: _allowRollForward,
                     verifySignatures: _verifySignatures ?? true,
-                    restoreActionConfig: restoreActionConfig
+                    restoreActionConfig: restoreActionConfig,
+                    force: force
                 );
 
                 EnsureVersionIsHigher(oldPackageNullable, newInstalledPackage, _allowPackageDowngrade);
@@ -234,7 +242,6 @@ internal class ToolInstallGlobalOrToolPathCommand : CommandBase
             }, packageId);
 
             scope.Complete();
-
         }
         return 0;
     }
@@ -305,29 +312,6 @@ internal class ToolInstallGlobalOrToolPathCommand : CommandBase
         }
     }
 
-    private static void RunWithHandlingUninstallError(Action uninstallAction, PackageId packageId)
-    {
-        try
-        {
-            uninstallAction();           
-        }
-        catch (Exception ex)
-            when (ToolUninstallCommandLowLevelErrorConverter.ShouldConvertToUserFacingError(ex))
-        {
-            var message = new List<string>
-            {
-                string.Format(CliCommandStrings.UpdateToolFailed, packageId)
-            };
-            message.AddRange(
-                ToolUninstallCommandLowLevelErrorConverter.GetUserFacingMessages(ex, packageId));
-
-            throw new GracefulException(
-                messages: message,
-                verboseMessages: [ex.ToString()],
-                isUserError: false);
-        }
-    }
-
     private FilePath? GetConfigFile()
     {
         FilePath? configFile = null;
@@ -337,28 +321,6 @@ internal class ToolInstallGlobalOrToolPathCommand : CommandBase
         }
 
         return configFile;
-    }
-
-    private static IToolPackage GetOldPackage(IToolPackageStoreQuery toolPackageStoreQuery, PackageId packageId)
-    {
-        IToolPackage oldPackageNullable;
-        try
-        {
-            oldPackageNullable = toolPackageStoreQuery.EnumeratePackageVersions(packageId).SingleOrDefault();
-        }
-        catch (InvalidOperationException)
-        {
-            throw new GracefulException(
-                messages:
-                [
-                    string.Format(
-                        CliCommandStrings.ToolUpdateToolHasMultipleVersionsInstalled,
-                        packageId),
-                ],
-                isUserError: false);
-        }
-
-        return oldPackageNullable;
     }
 
     private void PrintSuccessMessage(IToolPackage oldPackage, IToolPackage newInstalledPackage)
@@ -387,7 +349,7 @@ internal class ToolInstallGlobalOrToolPathCommand : CommandBase
             {
                 _reporter.WriteLine(
                     string.Format(
-                        
+
                         newInstalledPackage.Version.IsPrerelease ?
                         CliCommandStrings.UpdateSucceededPreVersionNoChange : CliCommandStrings.UpdateSucceededStableVersionNoChange,
                         newInstalledPackage.Id, newInstalledPackage.Version).Green());

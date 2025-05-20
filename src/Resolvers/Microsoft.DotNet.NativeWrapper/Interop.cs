@@ -28,7 +28,7 @@ namespace Microsoft.DotNet.NativeWrapper
         }
 
         // MSBuild SDK resolvers are required to be AnyCPU, but we have a native dependency and .NETFramework does not
-        // have a built-in facility for dynamically loading user native dlls for the appropriate platform. We therefore 
+        // have a built-in facility for dynamically loading user native dlls for the appropriate platform. We therefore
         // preload the version with the correct architecture (from a corresponding sub-folder relative to us) on static
         // construction so that subsequent P/Invokes can find it.
         private static void PreloadWindowsLibrary(string dllFileName)
@@ -194,5 +194,38 @@ namespace Microsoft.DotNet.NativeWrapper
                 return result;
             }
         }
+
+        private const string HostFxrName = "hostfxr";
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+        internal delegate void hostfxr_framework_resolved_callback(IntPtr framework_name, IntPtr framework_version, IntPtr framework_path, IntPtr result_context);
+
+        [DllImport(Constants.HostFxr, CharSet = CharSet.Unicode, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int hostfxr_resolve_frameworks2(
+            string runtime_config_path,
+            string[] additional_framework_paths,
+            int framework_paths_count,
+            hostfxr_framework_resolved_callback callback,
+            IntPtr result_context);
+
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct hostfxr_framework_info
+        {
+            public IntPtr name;
+            public IntPtr version;
+            public IntPtr path;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct hostfxr_resolved_frameworks
+        {
+            public int framework_count;
+            public IntPtr framework_info;
+        }
+
+        [DllImport(Constants.HostFxr, CharSet = CharSet.Unicode, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int hostfxr_resolve_frameworks(
+            [MarshalAs(UnmanagedType.LPWStr)] string runtime_config_path,
+            ref hostfxr_resolved_frameworks buffer);
     }
 }

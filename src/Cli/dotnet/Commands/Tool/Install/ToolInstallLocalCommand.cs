@@ -108,7 +108,8 @@ internal class ToolInstallLocalCommand : CommandBase
         }
 
         var existingPackage = existingPackageWithPackageId.Single();
-        var toolDownloadedPackage = _toolLocalPackageInstaller.Install(manifestFile, packageId);
+        bool force = _parseResult.GetValue(ToolInstallCommandParser.ForceOption);
+        var toolDownloadedPackage = _toolLocalPackageInstaller.Install(manifestFile, packageId, force);
 
         InstallToolUpdate(existingPackage, toolDownloadedPackage, manifestFile, packageId);
 
@@ -165,30 +166,18 @@ internal class ToolInstallLocalCommand : CommandBase
         return 0;
     }
 
-    public int InstallNewTool(FilePath manifestFile, PackageId packageId)
+    private int InstallNewTool(FilePath manifestFile, PackageId packageId)
     {
-        IToolPackage toolDownloadedPackage =
-            _toolLocalPackageInstaller.Install(manifestFile, packageId);
+        bool force = _parseResult.GetValue(ToolInstallCommandParser.ForceOption);
+        var toolDownloadedPackage = _toolLocalPackageInstaller.Install(manifestFile, packageId, force);
 
         _toolManifestEditor.Add(
             manifestFile,
-            toolDownloadedPackage.Id,
-            toolDownloadedPackage.Version,
-            [toolDownloadedPackage.Command.Name],
-            _allowRollForward);
+            packageId: toolDownloadedPackage.Id,
+            version: toolDownloadedPackage.Version,
+            commands: toolDownloadedPackage.Commands.Select(c => c.Name));
 
-        _localToolsResolverCache.SaveToolPackage(
-            toolDownloadedPackage,
-            _toolLocalPackageInstaller.TargetFrameworkToInstall);
-
-        _reporter.WriteLine(
-            string.Format(
-                CliCommandStrings.LocalToolInstallationSucceeded,
-                toolDownloadedPackage.Command.Name,
-                toolDownloadedPackage.Id,
-                toolDownloadedPackage.Version.ToNormalizedString(),
-                manifestFile.Value).Green());
-
+        PrintSuccessMessage(toolDownloadedPackage);
         return 0;
     }
 

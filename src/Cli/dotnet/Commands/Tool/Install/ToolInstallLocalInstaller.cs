@@ -10,6 +10,7 @@ using Microsoft.DotNet.Cli.ToolPackage;
 using Microsoft.DotNet.Cli.Utils;
 using Microsoft.Extensions.EnvironmentAbstractions;
 using NuGet.Versioning;
+using System.Collections.Generic;
 
 namespace Microsoft.DotNet.Cli.Commands.Tool.Install;
 
@@ -46,7 +47,7 @@ internal class ToolInstallLocalInstaller
         TargetFrameworkToInstall = BundledTargetFramework.GetTargetFrameworkMoniker();
     }
 
-    public IToolPackage Install(FilePath manifestFile, PackageId packageId)
+    public IToolPackage Install(FilePath manifestFile, PackageId packageId, bool force = false)
     {
         if (!string.IsNullOrEmpty(_configFilePath) && !File.Exists(_configFilePath))
         {
@@ -67,23 +68,33 @@ internal class ToolInstallLocalInstaller
         try
         {
             IToolPackage toolDownloadedPackage = _toolPackageDownloader.InstallPackage(
-                    new PackageLocation(
-                        nugetConfig: configFile,
-                        additionalFeeds: _sources,
-                        rootConfigDirectory: manifestFile.GetDirectoryPath().GetParentPath()),
-                    packageId,
-                    verbosity: _verbosity,
-                    versionRange,
-                    TargetFrameworkToInstall,
-                    restoreActionConfig: _restoreActionConfig
-                    );
+                new PackageLocation(
+                    nugetConfig: configFile,
+                    additionalFeeds: _sources,
+                    rootConfigDirectory: manifestFile.GetDirectoryPath().GetParentPath()),
+                packageId,
+                verbosity: _verbosity,
+                versionRange,
+                TargetFrameworkToInstall,
+                force: force,
+                restoreActionConfig: _restoreActionConfig
+            );
 
             return toolDownloadedPackage;
         }
-        catch (Exception ex) when (InstallToolCommandLowLevelErrorConverter.ShouldConvertToUserFacingError(ex))
+        catch (Exception ex) when (ToolInstallCommandLowLevelErrorConverter.ShouldConvertToUserFacingError(ex))
         {
+            var message = new List<string>
+            {
+                string.Format(
+                    CliCommandStrings.ToolInstallFailed,
+                    packageId)
+            };
+            message.AddRange(
+                ToolInstallCommandLowLevelErrorConverter.GetUserFacingMessages(ex, packageId));
+
             throw new GracefulException(
-                messages: InstallToolCommandLowLevelErrorConverter.GetUserFacingMessages(ex, packageId),
+                messages: message,
                 verboseMessages: [ex.ToString()],
                 isUserError: false);
         }

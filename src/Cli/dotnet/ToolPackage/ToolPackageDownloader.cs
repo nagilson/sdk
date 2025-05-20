@@ -22,6 +22,8 @@ using NuGet.ProjectModel;
 using NuGet.Repositories;
 using NuGet.RuntimeModel;
 using NuGet.Versioning;
+using System.Text;
+using Microsoft.DotNet.Cli.ToolPackage.Native;
 
 namespace Microsoft.DotNet.Cli.ToolPackage;
 
@@ -29,7 +31,7 @@ internal class ToolPackageDownloader : IToolPackageDownloader
 {
     private readonly IToolPackageStore _toolPackageStore;
 
-    // The directory that the tool package is returned 
+    // The directory that the tool package is returned
     protected DirectoryPath _toolReturnPackageDirectory;
 
     // The directory that the tool asset file is returned
@@ -50,6 +52,7 @@ internal class ToolPackageDownloader : IToolPackageDownloader
     protected readonly string _runtimeJsonPath;
 
     private readonly string _currentWorkingDirectory;
+    private readonly NETCoreSdkResolverNativeWrapper _nativeSdkResolver;
 
     public ToolPackageDownloader(
         IToolPackageStore store,
@@ -62,20 +65,23 @@ internal class ToolPackageDownloader : IToolPackageDownloader
         ISettings settings = Settings.LoadDefaultSettings(currentWorkingDirectory ?? Directory.GetCurrentDirectory());
         _localToolDownloadDir = new DirectoryPath(SettingsUtility.GetGlobalPackagesFolder(settings));
         _currentWorkingDirectory = currentWorkingDirectory;
-        
+
         _localToolAssetDir = new DirectoryPath(PathUtilities.CreateTempSubdirectory());
         _runtimeJsonPath = runtimeJsonPathForTests ?? Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "RuntimeIdentifierGraph.json");
+        _nativeSdkResolver = new NETCoreSdkResolverNativeWrapper();
     }
 
-    public IToolPackage InstallPackage(PackageLocation packageLocation, PackageId packageId,
+    public IToolPackage InstallPackage(
+        PackageLocation packageLocation,
+        PackageId packageId,
         VerbosityOptions verbosity = VerbosityOptions.normal,
         VersionRange versionRange = null,
         string targetFramework = null,
         bool isGlobalTool = false,
         bool isGlobalToolRollForward = false,
         bool verifySignatures = true,
-        RestoreActionConfig restoreActionConfig = null
-        )
+        RestoreActionConfig restoreActionConfig = null,
+        bool force = false)
     {
         var packageRootDirectory = _toolPackageStore.GetRootPackageDirectory(packageId);
         string rollbackDirectory = null;
@@ -147,9 +153,9 @@ internal class ToolPackageDownloader : IToolPackageDownloader
                             packageId,
                             packageVersion.ToNormalizedString()));
                 }
-                                   
+
                 CreateAssetFile(packageId, packageVersion, toolDownloadDir, assetFileDirectory, _runtimeJsonPath, targetFramework);
-                
+
                 DirectoryPath toolReturnPackageDirectory;
                 DirectoryPath toolReturnJsonParentDirectory;
 
@@ -168,10 +174,18 @@ internal class ToolPackageDownloader : IToolPackageDownloader
                     toolReturnJsonParentDirectory = _localToolAssetDir;
                 }
 
-                var toolPackageInstance = new ToolPackageInstance(id: packageId,
-                                version: packageVersion,
-                                packageDirectory: toolReturnPackageDirectory,
-                                assetsJsonParentDirectory: toolReturnJsonParentDirectory);
+                var toolPackageInstance = new ToolPackageInstance(
+                    id: packageId,
+                    version: packageVersion,
+                    packageDirectory: toolReturnPackageDirectory,
+                    assetsJsonParentDirectory: toolReturnJsonParentDirectory);
+
+                // Check runtime compatibility before proceeding
+                var runtimeConfigPath = toolPackageInstance.RuntimeConfigPath;
+                if (!force && !IsRuntimeConfigCompatible(runtimeConfigPath, isGlobalToolRollForward))
+                {
+                    ThrowIncompatibleRuntimeException(packageId, targetFramework ?? $"{Environment.Version.Major}.{Environment.Version.Minor}");
+                }
 
                 if (isGlobalToolRollForward)
                 {
@@ -347,7 +361,7 @@ internal class ToolPackageDownloader : IToolPackageDownloader
         NuGetFramework currentTargetFramework;
         if(targetFramework != null)
         {
-            currentTargetFramework = NuGetFramework.Parse(targetFramework); 
+            currentTargetFramework = NuGetFramework.Parse(targetFramework);
         }
         else
         {
@@ -411,5 +425,78 @@ internal class ToolPackageDownloader : IToolPackageDownloader
             additionalSourceFeeds: packageLocation.AdditionalFeeds);
 
         return nugetPackageDownloader.GetBestPackageVersionAsync(packageId, versionRange, packageSourceLocation).GetAwaiter().GetResult();
+    }
+
+    private bool IsRuntimeConfigCompatible(string runtimeConfigPath, bool allowRollForward)
+    {
+        if (!File.Exists(runtimeConfigPath))
+        {
+            return false;
+        }
+
+        if (allowRollForward)
+        {
+            // When roll-forward is allowed, we're more lenient with version matching
+            return true;
+        }
+
+        // Use hostfxr to resolve frameworks from the runtime config
+        if (!_nativeSdkResolver.TryResolveFrameworksForRuntimeConfig(runtimeConfigPath, out var frameworks))
+        {
+            return false;
+        }
+
+        // Check compatibility with current runtime and all required frameworks
+        foreach (var framework in frameworks)
+        {
+            if (!IsFrameworkCompatible(framework))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private bool IsFrameworkCompatible(NETCoreSdkResolverNativeWrapper.RuntimeConfigFramework framework)
+    {
+        // Check if the framework is compatible with the current runtime
+        var currentVersion = $"{Environment.Version.Major}.{Environment.Version.Minor}.{Environment.Version.Build}";
+        var requiredVersion = framework.Version;
+
+        // Basic version compatibility check
+        if (!Version.TryParse(currentVersion, out var current) || !Version.TryParse(requiredVersion, out var required))
+        {
+            return false;
+        }
+
+        if (current.Major != required.Major)
+        {
+            return false;
+        }
+
+        return current >= required;
+    }
+
+    private void ThrowIncompatibleRuntimeException(PackageId packageId, string targetFramework)
+    {
+        var errorMessage = new StringBuilder();
+        errorMessage.AppendLine("Installation failed.");
+        errorMessage.AppendLine();
+        errorMessage.AppendLine("This app wasn't installed because it won't run on your machine. This can be resolved by one of the following:");
+        errorMessage.AppendLine();
+        errorMessage.AppendLine("1. Install with the `--allow-roll-forward` flag, using the following command:");
+        errorMessage.AppendLine();
+        errorMessage.AppendLine($"    dotnet tool install -g --allow-roll-forward {packageId}");
+        errorMessage.AppendLine();
+        errorMessage.AppendLine("2. Install .NET " + targetFramework + " using the following link:");
+        errorMessage.AppendLine();
+        errorMessage.AppendLine("    https://aka.ms/dotnet/download/sdk/");
+        errorMessage.AppendLine();
+        errorMessage.AppendLine("3. Install with `--force` and manually configure the tool to run, using the following command:");
+        errorMessage.AppendLine();
+        errorMessage.AppendLine($"    dotnet tool install -g --force {packageId}");
+
+        throw new ToolPackageException(errorMessage.ToString());
     }
 }
