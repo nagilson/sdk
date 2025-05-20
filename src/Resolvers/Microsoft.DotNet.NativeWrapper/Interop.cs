@@ -123,6 +123,36 @@ namespace Microsoft.DotNet.NativeWrapper
             hostfxr_get_dotnet_environment_info_result_fn result,
             IntPtr result_context);
 
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct hostfxr_initialize_parameters
+        {
+            public nuint size;
+            public IntPtr host_path;
+            public IntPtr dotnet_root;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct hostfxr_resolve_frameworks_result
+        {
+            public nuint size;
+            public nuint resolved_count;
+            public IntPtr resolved_frameworks;
+            public nuint unresolved_count;
+            public IntPtr unresolved_frameworks;
+        };
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        internal delegate void hostfxr_resolve_frameworks_result_fn(
+         IntPtr result,
+         IntPtr result_context);
+
+        [DllImport(Constants.HostFxr, CharSet = CharSet.Auto, ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+        internal static extern int hostfxr_resolve_frameworks_for_runtime_config(
+           string runtime_config_path,
+           hostfxr_initialize_parameters parameters,
+           hostfxr_resolve_frameworks_result_fn callback,
+           IntPtr result_context);
+
         public static class Windows
         {
             private const CharSet UTF16 = CharSet.Unicode;
