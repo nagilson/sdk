@@ -65,6 +65,47 @@ internal class InstallerOrchestratorSingleton
         return install;
     }
 
+    // Return true on success, false elsewise.
+    public bool Uninstall(DotnetInstall install)
+    {
+        // Check if the install exists and can be uninstalled
+        using (var uninstallLock = modifyInstallStateMutex())
+        {
+            var existingInstalls = GetExistingInstalls(install.MuxerDirectory);
+            
+            bool installExists = existingInstalls.Any(existing => 
+                existing.FullySpecifiedVersion.Value == install.FullySpecifiedVersion.Value &&
+                existing.Type == install.Type &&
+                existing.Architecture == install.Architecture);
+                
+            if (!installExists)
+            {
+                Console.WriteLine($".NET SDK {install.FullySpecifiedVersion.Value} is not installed, skipping uninstallation.");
+                return false;
+            }
+            
+            try
+            {
+                DotnetArchiveUninstaller uninstaller = new(install);
+                uninstaller.Prepare();
+                
+                // Check again in case prepare took a while
+                if (!InstallAlreadyExists(install.MuxerDirectory, install))
+                {
+                    return false;
+                }
+                
+                uninstaller.Commit();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to uninstall .NET SDK {install.FullySpecifiedVersion.Value}: {ex.Message}");
+                return false;
+            }
+        }
+    }
+
     /// <summary>
     /// Gets the existing installs from the manifest. Must hold a mutex over the directory.
     /// </summary>

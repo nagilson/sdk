@@ -60,6 +60,23 @@ internal static class DnupUtilities
 
         return $"{os}-{arch}";
     }
+    
+    public static string GetCurrentRid()
+    {
+        var os = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "win" :
+                 RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "osx" :
+                 RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "linux" : "unknown";
+
+        var arch = RuntimeInformation.OSArchitecture switch
+        {
+            System.Runtime.InteropServices.Architecture.X64 => "x64",
+            System.Runtime.InteropServices.Architecture.X86 => "x86",
+            System.Runtime.InteropServices.Architecture.Arm64 => "arm64",
+            _ => "x64" // Default fallback
+        };
+
+        return $"{os}-{arch}";
+    }
 
     public static string GetFileExtensionForPlatform()
     {

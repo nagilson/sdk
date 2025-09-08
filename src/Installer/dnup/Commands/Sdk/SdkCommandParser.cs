@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.CommandLine;
 using System.Text;
 using Microsoft.DotNet.Tools.Bootstrapper.Commands.Sdk.Install;
+using Microsoft.DotNet.Tools.Bootstrapper.Commands.Sdk.Uninstall;
 
 namespace Microsoft.DotNet.Tools.Bootstrapper.Commands.Sdk
 {
@@ -23,6 +24,7 @@ namespace Microsoft.DotNet.Tools.Bootstrapper.Commands.Sdk
             Command command = new("sdk");
             //command.Subcommands.Add(SdkCheckCommandParser.GetCommand());
             command.Subcommands.Add(SdkInstallCommandParser.GetSdkInstallCommand());
+            command.Subcommands.Add(SdkUninstallCommandParser.GetSdkUninstallCommand());
             //command.Subcommands.Add(SdkUpdateCommandParser.GetSdkUpdateCommand());
 
             //command.SetAction((parseResult) => parseResult.HandleMissingCommand());
