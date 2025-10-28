@@ -65,13 +65,9 @@ jobs:
       - powershell: >-
           eng/common/build.ps1
           -restore -build -sign -pack -publish -ci
-          -verbosity detailed
-          -binaryLog
+          -verbosity normal
           -configuration $(_BuildConfig)
           -projects src\Installer\Microsoft.Dotnet.Installation\Microsoft.Dotnet.Installation.csproj;src\Installer\dnup\dnup.csproj
           /p:DotNetSignType=$(_SignType)
           /p:TeamName=$(_TeamName)
-          /p:DotNetPublishUsingPipelines=true
-          /p:OfficialBuildId=$(OfficialBuildId)
-          /p:StabilizePackageVersion=${{ parameters.stabilizePackageVersion }}
         displayName: 📦 Package dnup library (arcade)
