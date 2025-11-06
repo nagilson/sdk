@@ -11,7 +11,7 @@ set DOTNET_MULTILEVEL_LOOKUP=0
 set TestFullMSBuild=%1
 
 REM Ensure Visual Studio instances allow preview SDKs
-PowerShell -ExecutionPolicy ByPass -NoProfile -File "%HELIX_CORRELATION_PAYLOAD%\t\eng\EnablePreviewSdks.ps1"
+PowerShell -ExecutionPolicy ByPass -NoProfile -File "%HELIX_CORRELATION_PAYLOAD%\t\eng\enable-preview-sdks.ps1"
 
 REM Use powershell to call partical Arcade logic to get full framework msbuild path and assign it
 if "%TestFullMSBuild%"=="true" (
