@@ -1,9 +1,6 @@
 {
   "tools": {
     "dotnet": "9.0.111",
-    "sdk": {
-      "allowPrerelease": true
-    },
     "runtimes": {
       "dotnet": [
         "$(VSRedistCommonNetCoreSharedFrameworkx6490PackageVersion)"

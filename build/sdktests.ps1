@@ -7,7 +7,7 @@ Param(
     [string] $tests = "",
     [Parameter(ValueFromRemainingArguments=$true)][String[]]$additionalRunParams
 )
-EnablePreviewSdks
+
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = "Stop"
 
@@ -54,7 +54,7 @@ if ($run)
         $cmd = "testSdk$name"
 
         & $cmd -xml ($name + "results.xml") $additionalRunParams
-
+        
         if ($LASTEXITCODE -ne 0)
         {
             $failedTests += $name
