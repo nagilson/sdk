@@ -80,11 +80,13 @@ jobs:
         id: check-changes
         if: steps.compare.outcome == 'success'
         run: |
-          # Check if there are changes to snapshot files
-          if git diff --name-only test/dotnet.Tests/CompletionTests/snapshots/ | grep -E '\.received\.'; then
+          # Check snapshot directory for received/verified changes (including untracked files)
+          status_output=$(git status --short test/dotnet.Tests/CompletionTests/snapshots/ || true)
+
+          if echo "$status_output" | grep -E '\.(received|verified)\.'; then
             echo "changes=true" >> $GITHUB_OUTPUT
             echo "Changed snapshot files:"
-            git diff --name-only test/dotnet.Tests/CompletionTests/snapshots/
+            echo "$status_output"
           else
             echo "changes=false" >> $GITHUB_OUTPUT
           fi
