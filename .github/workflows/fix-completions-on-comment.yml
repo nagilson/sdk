@@ -80,13 +80,21 @@ jobs:
         id: check-changes
         if: steps.compare.outcome == 'success'
         run: |
-          # Check snapshot directory for received/verified changes (including untracked files)
-          status_output=$(git status --short test/dotnet.Tests/CompletionTests/snapshots/ || true)
+          # Detect new received files (ignored by git) and diff-ed verified files
+          shopt -s nullglob
+          received_files=(test/dotnet.Tests/CompletionTests/snapshots/**/*.received.*)
+          shopt -u nullglob
 
-          if echo "$status_output" | grep -E '\.(received|verified)\.'; then
+          diff_output=$(git diff --name-only -- test/dotnet.Tests/CompletionTests/snapshots/ | grep -E '\.verified\.' || true)
+
+          if [ ${#received_files[@]} -gt 0 ] || [ -n "$diff_output" ]; then
             echo "changes=true" >> $GITHUB_OUTPUT
             echo "Changed snapshot files:"
-            echo "$status_output"
+            printf '%s
+' "${received_files[@]}"
+            if [ -n "$diff_output" ]; then
+              echo "$diff_output"
+            fi
           else
             echo "changes=false" >> $GITHUB_OUTPUT
           fi
