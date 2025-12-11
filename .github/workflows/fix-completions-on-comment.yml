@@ -27,6 +27,18 @@ jobs:
               content: 'eyes'
             });
 
+      - name: Comment on PR - Started
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              body: `▶️ CLI completion snapshot update started. Track progress in [this workflow run](${runUrl}).`
+            });
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -108,11 +120,12 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${process.env.GITHUB_RUN_ID}`;
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.payload.issue.number,
-              body: '✅ CLI completion snapshots have been updated and committed to this PR.'
+              body: `✅ CLI completion snapshots have been updated and committed to this PR. See [workflow details](${runUrl}).`
             });
             await github.rest.reactions.createForIssueComment({
               owner: context.repo.owner,
@@ -126,11 +139,12 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${process.env.GITHUB_RUN_ID}`;
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.payload.issue.number,
-              body: 'ℹ️ No completion snapshot files needed to be updated.'
+              body: `ℹ️ No completion snapshot files needed to be updated. Review [the workflow run](${runUrl}).`
             });
             await github.rest.reactions.createForIssueComment({
               owner: context.repo.owner,
