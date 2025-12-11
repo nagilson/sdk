@@ -52,7 +52,7 @@ jobs:
         if: steps.build.outcome == 'success'
         run: |
           # Use the repo-local dotnet that was built
-          ./.dotnet/dotnet test test/dotnet.Tests/dotnet.Tests.csproj --filter "Name~VerifyCompletions"
+          ./.dotnet/dotnet test test/dotnet.Tests/dotnet.Tests.csproj --filter "FullyQualifiedName~VerifyCompletions"
         continue-on-error: true
         timeout-minutes: 10
       
