@@ -14,7 +14,7 @@ jobs:
     # Only run on PR comments that start with /fixcompletions
     if: github.event.issue.pull_request && startsWith(github.event.comment.body, '/fixcompletions')
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: React to comment
         uses: actions/github-script@v7
@@ -26,19 +26,19 @@ jobs:
               comment_id: context.payload.comment.id,
               content: 'eyes'
             });
-      
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
-      
+
       - name: Checkout PR branch
         run: |
           gh pr checkout ${{ github.event.issue.number }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: Build repository
         id: build
         run: |
@@ -46,7 +46,7 @@ jobs:
           ./build.sh
         continue-on-error: true
         timeout-minutes: 15
-      
+
       - name: Run completion tests
         id: test
         if: steps.build.outcome == 'success'
@@ -55,14 +55,15 @@ jobs:
           ./.dotnet/dotnet test test/dotnet.Tests/dotnet.Tests.csproj --filter "FullyQualifiedName~VerifyCompletions"
         continue-on-error: true
         timeout-minutes: 10
-      
+
       - name: Compare snapshots
         id: compare
         if: steps.test.outcome != 'skipped'
         run: |
-          dotnet restore test/dotnet.Tests/ /t:CompareCliSnapshots
+          # Use repo-local dotnet so we only restore the project we need on the runner
+          ./.dotnet/dotnet msbuild test/dotnet.Tests/dotnet.Tests.csproj -restore -t:CompareCliSnapshots
         continue-on-error: true
-      
+
       - name: Check for snapshot changes
         id: check-changes
         if: steps.compare.outcome == 'success'
@@ -75,33 +76,33 @@ jobs:
           else
             echo "changes=false" >> $GITHUB_OUTPUT
           fi
-      
+
       - name: Update verified snapshots
         id: update
         if: steps.check-changes.outputs.changes == 'true'
         run: |
           # This renames .received.* files to .verified.*
-          dotnet restore test/dotnet.Tests/ /t:UpdateCliSnapshots
+          ./.dotnet/dotnet msbuild test/dotnet.Tests/dotnet.Tests.csproj -restore -t:UpdateCliSnapshots
         continue-on-error: true
-      
+
       - name: Commit and push snapshot changes
         id: commit
         if: steps.update.outcome == 'success'
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          
+
           # Add snapshot files
           git add test/dotnet.Tests/CompletionTests/snapshots/
-          
+
           # Create commit
           COMMIT_DATE=$(date -u +"%Y-%m-%d")
           git commit -m "Update CLI completion snapshots - $COMMIT_DATE"
-          
+
           # Push to the PR branch
           git push
         continue-on-error: true
-      
+
       - name: Comment on PR - Success
         if: steps.commit.outcome == 'success'
         uses: actions/github-script@v7
@@ -119,7 +120,7 @@ jobs:
               comment_id: context.payload.comment.id,
               content: '+1'
             });
-      
+
       - name: Comment on PR - No changes
         if: steps.compare.outcome == 'success' && steps.check-changes.outputs.changes == 'false'
         uses: actions/github-script@v7
@@ -137,14 +138,14 @@ jobs:
               comment_id: context.payload.comment.id,
               content: '+1'
             });
-      
+
       - name: Comment on PR - Failure
         if: steps.build.outcome == 'failure' || (steps.test.outcome == 'failure' && steps.compare.outcome != 'success') || (steps.check-changes.outputs.changes == 'true' && (steps.update.outcome == 'failure' || steps.commit.outcome == 'failure'))
         uses: actions/github-script@v7
         with:
           script: |
             let errorMsg = '❌ Failed to update completion snapshots.';
-            
+
             if ('${{ steps.build.outcome }}' === 'failure') {
               errorMsg += ' The build failed.';
             } else if ('${{ steps.update.outcome }}' === 'failure') {
@@ -152,7 +153,7 @@ jobs:
             } else if ('${{ steps.commit.outcome }}' === 'failure') {
               errorMsg += ' Could not commit changes.';
             }
-            
+
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
