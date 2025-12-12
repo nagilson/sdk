@@ -11,8 +11,9 @@ permissions:
 
 jobs:
   fix-completions:
-    # Only run on PR comments that start with /fixcompletions
-    if: github.event.issue.pull_request && startsWith(github.event.comment.body, '/fixcompletions')
+    # Only run on PR comments that start with /fixcompletions or /completions
+    if: github.event.issue.pull_request &&
+      (startsWith(github.event.comment.body, '/fixcompletions') || startsWith(github.event.comment.body, '/completions'))
     runs-on: ubuntu-latest
 
     steps:

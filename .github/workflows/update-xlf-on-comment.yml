@@ -11,8 +11,9 @@ permissions:
 
 jobs:
   update-xlf:
-    # Only run on PR comments that start with /updatexlf
-    if: github.event.issue.pull_request && startsWith(github.event.comment.body, '/updatexlf')
+    # Only run on PR comments that start with /updatexlf or /xlf
+    if: github.event.issue.pull_request &&
+      (startsWith(github.event.comment.body, '/updatexlf') || startsWith(github.event.comment.body, '/xlf'))
     runs-on: ubuntu-latest
 
     steps:
