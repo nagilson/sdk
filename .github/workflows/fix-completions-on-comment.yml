@@ -90,8 +90,7 @@ jobs:
           if [ ${#received_files[@]} -gt 0 ] || [ -n "$diff_output" ]; then
             echo "changes=true" >> $GITHUB_OUTPUT
             echo "Changed snapshot files:"
-            printf '%s
-' "${received_files[@]}"
+            printf '%s\n' "${received_files[@]}"
             if [ -n "$diff_output" ]; then
               echo "$diff_output"
             fi
