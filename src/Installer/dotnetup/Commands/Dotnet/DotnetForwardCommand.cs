@@ -8,9 +8,13 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
+using System.Security.Principal;
 using Microsoft.Dotnet.Installation;
 using Microsoft.Dotnet.Installation.Internal;
 using Microsoft.DotNet.Tools.Bootstrapper;
+using Microsoft.Win32.SafeHandles;
 
 namespace Microsoft.DotNet.Tools.Bootstrapper.Commands.Dotnet;
 
@@ -171,34 +175,174 @@ internal sealed class ProcessForwardingInvoker : IDotnetForwardingInvoker
 {
     public int Invoke(string muxerPath, string installRoot, IReadOnlyList<string> arguments)
     {
-        using var process = new Process();
-        process.StartInfo.FileName = muxerPath;
-        process.StartInfo.UseShellExecute = false;
-        process.StartInfo.WorkingDirectory = Environment.CurrentDirectory;
-        process.StartInfo.Environment["DOTNET_ROOT"] = installRoot;
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = muxerPath,
+            UseShellExecute = false,
+            WorkingDirectory = Environment.CurrentDirectory
+        };
+
+        startInfo.Environment["DOTNET_ROOT"] = installRoot;
         if (OperatingSystem.IsWindows())
         {
-            process.StartInfo.Environment["DOTNET_ROOT(x86)"] = installRoot;
+            startInfo.Environment["DOTNET_ROOT(x86)"] = installRoot;
         }
 
         foreach (var argument in arguments)
         {
-            process.StartInfo.ArgumentList.Add(argument);
+            startInfo.ArgumentList.Add(argument);
         }
 
+        Process? process = null;
         try
         {
-            if (!process.Start())
+            // On Windows forward to dotnet.exe using a non-elevated token when possible.
+            if (OperatingSystem.IsWindows() && WindowsProcessLauncher.TryStartNonElevated(startInfo, out process))
+            {
+                process.WaitForExit();
+                return process.ExitCode;
+            }
+
+            process = Process.Start(startInfo);
+            if (process is null)
             {
                 throw new InvalidOperationException($"Failed to start '{muxerPath}'.");
             }
+
+            process.WaitForExit();
+            return process.ExitCode;
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
         {
             throw new InvalidOperationException($"Failed to start '{muxerPath}': {ex.Message}", ex);
         }
+        finally
+        {
+            process?.Dispose();
+        }
+    }
+}
 
-        process.WaitForExit();
-        return process.ExitCode;
+[SupportedOSPlatform("windows")]
+internal static class WindowsProcessLauncher
+{
+    public static bool TryStartNonElevated(ProcessStartInfo startInfo, out Process? process)
+    {
+        process = null;
+
+        try
+        {
+            if (!TryAcquireShellToken(out var shellToken))
+            {
+                return false;
+            }
+
+            using (shellToken)
+            {
+                if (!NativeMethods.DuplicateTokenEx(
+                        shellToken,
+                        NativeMethods.TokenAccess,
+                        IntPtr.Zero,
+                        NativeMethods.SecurityImpersonationLevel.SecurityImpersonation,
+                        NativeMethods.TokenType.TokenImpersonation,
+                        out var impersonationToken))
+                {
+                    return false;
+                }
+
+                using (impersonationToken)
+                {
+                    process = WindowsIdentity.RunImpersonated(
+                        impersonationToken,
+                        () => Process.Start(startInfo));
+                }
+            }
+
+            return process is not null;
+        }
+        catch (Win32Exception)
+        {
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+        catch (PlatformNotSupportedException)
+        {
+            return false;
+        }
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static bool TryAcquireShellToken(out SafeAccessTokenHandle tokenHandle)
+    {
+        tokenHandle = new SafeAccessTokenHandle(IntPtr.Zero);
+
+        using var currentProcess = Process.GetCurrentProcess();
+        var currentSessionId = currentProcess.SessionId;
+
+        foreach (var shellProcess in Process.GetProcessesByName("explorer"))
+        {
+            using (shellProcess)
+            {
+                if (shellProcess.SessionId != currentSessionId)
+                {
+                    continue;
+                }
+
+                if (!NativeMethods.OpenProcessToken(shellProcess.SafeHandle, NativeMethods.TokenAccess, out var openedToken))
+                {
+                    continue;
+                }
+
+                tokenHandle = openedToken;
+                return true;
+            }
+        }
+
+        tokenHandle = new SafeAccessTokenHandle(IntPtr.Zero);
+        return false;
+    }
+
+    private static class NativeMethods
+    {
+        internal const uint TokenAssignPrimary = 0x0001;
+        internal const uint TokenDuplicate = 0x0002;
+        internal const uint TokenQuery = 0x0008;
+        internal const uint TokenAdjustDefault = 0x0080;
+        internal const uint TokenAdjustSessionId = 0x0100;
+
+        internal const uint TokenAccess = TokenAssignPrimary | TokenDuplicate | TokenQuery | TokenAdjustDefault | TokenAdjustSessionId;
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        internal static extern bool OpenProcessToken(SafeHandle processHandle, uint desiredAccess, out SafeAccessTokenHandle tokenHandle);
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        internal static extern bool DuplicateTokenEx(
+            SafeAccessTokenHandle existingToken,
+            uint desiredAccess,
+            IntPtr tokenAttributes,
+            SecurityImpersonationLevel impersonationLevel,
+            TokenType tokenType,
+            out SafeAccessTokenHandle newToken);
+
+        internal enum SecurityImpersonationLevel
+        {
+            SecurityAnonymous,
+            SecurityIdentification,
+            SecurityImpersonation,
+            SecurityDelegation
+        }
+
+        internal enum TokenType
+        {
+            TokenPrimary = 1,
+            TokenImpersonation
+        }
     }
 }
