@@ -16,9 +16,6 @@ function InitializeCustomSDKToolset {
 
     $cli = InitializeDotnetCli -install:$true
 
-    # Build dotnetup if not already present (needs SDK to be installed first)
-    EnsureDotnetupBuilt
-
     InstallDotNetSharedFramework "6.0.0"
     InstallDotNetSharedFramework "7.0.0"
     InstallDotNetSharedFramework "8.0.0"
@@ -27,24 +24,6 @@ function InitializeCustomSDKToolset {
     CreateBuildEnvScripts
     CreateVSShortcut
     InstallNuget
-}
-
-function EnsureDotnetupBuilt {
-    $dotnetupExe = Join-Path $PSScriptRoot "dotnetup\dotnetup.exe"
-
-    if (!(Test-Path $dotnetupExe)) {
-        Write-Host "Building dotnetup..."
-        $dotnetupProject = Join-Path $RepoRoot "src\Installer\dotnetup\dotnetup.csproj"
-        $dotnetupOutDir = Join-Path $PSScriptRoot "dotnetup"
-
-        & $env:DOTNET_INSTALL_DIR\dotnet publish $dotnetupProject -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o $dotnetupOutDir
-
-        if ($lastExitCode -ne 0) {
-            throw "Failed to build dotnetup (exit code '$lastExitCode')."
-        }
-
-        Write-Host "dotnetup built successfully"
-    }
 }
 
 function InstallNuGet {
@@ -136,12 +115,21 @@ function CreateVSShortcut() {
     $shortcut.Save()
 }
 
+function EnsureDotnetupBuilt {
+    # Silently rebuild dotnetup if source files have changed
+    $updateScript = Join-Path $PSScriptRoot "update-dotnetup.ps1"
+    & $updateScript
+}
+
 function InstallDotNetSharedFramework([string]$version) {
     $dotnetRoot = $env:DOTNET_INSTALL_DIR
     $fxDir = Join-Path $dotnetRoot "shared\Microsoft.NETCore.App\$version"
 
     if (!(Test-Path $fxDir)) {
-        $dotnetupExe = Join-Path $PSScriptRoot "dotnetup\dotnetup.exe"
+        EnsureDotnetupBuilt
+        $arch = $env:PROCESSOR_ARCHITECTURE
+        $rid = if ($arch -eq "ARM64") { "win-arm64" } else { "win-x64" }
+        $dotnetupExe = Join-Path $PSScriptRoot "dotnetup\$rid\dotnetup.exe"
 
         & $dotnetupExe runtime install core $version --install-path $dotnetRoot --no-progress --set-default-install false
 

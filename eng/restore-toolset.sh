@@ -21,9 +21,6 @@ function InitializeCustomSDKToolset {
 
   InitializeDotNetCli true
 
-  # Build dotnetup if not already present (needs SDK to be installed first)
-  EnsureDotnetupBuilt
-
   InstallDotNetSharedFramework "6.0.0"
   InstallDotNetSharedFramework "7.0.0"
   InstallDotNetSharedFramework "8.0.0"
@@ -32,16 +29,18 @@ function InitializeCustomSDKToolset {
   CreateBuildEnvScript
 }
 
-# Builds dotnetup if the executable doesn't exist
-function EnsureDotnetupBuilt {
-  local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  local dotnetup_dir="$script_dir/dotnetup"
-  local dotnetup_exe="$dotnetup_dir/dotnetup"
+# Installs additional shared frameworks for testing purposes
+function InstallDotNetSharedFramework {
+  local version=$1
+  local dotnet_root=$DOTNET_INSTALL_DIR
+  local fx_dir="$dotnet_root/shared/Microsoft.NETCore.App/$version"
 
-  if [[ ! -f "$dotnetup_exe" ]]; then
-    echo "Building dotnetup..."
-    local dotnetup_project="$repo_root/src/Installer/dotnetup/dotnetup.csproj"
-
+  if [[ ! -d "$fx_dir" ]]; then
+    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    
+    # Ensure dotnetup is built if source has changed
+    "$script_dir/update-dotnetup.sh"
+    
     # Determine RID based on OS
     local rid
     if [[ "$(uname)" == "Darwin" ]]; then
@@ -57,27 +56,8 @@ function EnsureDotnetupBuilt {
         rid="linux-x64"
       fi
     fi
-
-    "$DOTNET_INSTALL_DIR/dotnet" publish "$dotnetup_project" -c Release -r "$rid" --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o "$dotnetup_dir"
-
-    if [[ $? -ne 0 ]]; then
-      echo "Failed to build dotnetup."
-      ExitWithExitCode 1
-    fi
-
-    echo "dotnetup built successfully"
-  fi
-}
-
-# Installs additional shared frameworks for testing purposes
-function InstallDotNetSharedFramework {
-  local version=$1
-  local dotnet_root=$DOTNET_INSTALL_DIR
-  local fx_dir="$dotnet_root/shared/Microsoft.NETCore.App/$version"
-
-  if [[ ! -d "$fx_dir" ]]; then
-    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local dotnetup_exe="$script_dir/dotnetup/dotnetup"
+    
+    local dotnetup_exe="$script_dir/dotnetup/$rid/dotnetup"
 
     "$dotnetup_exe" runtime install core "$version" --install-path "$dotnet_root" --no-progress --set-default-install false
     local lastexitcode=$?
