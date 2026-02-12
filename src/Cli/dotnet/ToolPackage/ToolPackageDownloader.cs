@@ -167,7 +167,7 @@ internal class ToolPackageDownloader : ToolPackageDownloaderBase
         collection.Load(package.Files);
 
         //  Create criteria
-        var managedCriteria = new List<SelectionCriteria>(1);
+        var managedCriteria = new List<SelectionCriteria>();
         // Use major.minor version of currently running version of .NET
         NuGetFramework currentTargetFramework;
         if (targetFramework != null)
@@ -179,10 +179,17 @@ internal class ToolPackageDownloader : ToolPackageDownloaderBase
             currentTargetFramework = new NuGetFramework(FrameworkConstants.FrameworkIdentifiers.NetCoreApp, new Version(Environment.Version.Major, Environment.Version.Minor));
         }
 
+        // First try RID-specific match
         var standardCriteria = conventions.Criteria.ForFrameworkAndRuntime(
             currentTargetFramework,
             RuntimeInformation.RuntimeIdentifier);
         managedCriteria.Add(standardCriteria);
+
+        // Also try "any" RID as fallback for portable tools
+        var anyRidCriteria = conventions.Criteria.ForFrameworkAndRuntime(
+            currentTargetFramework,
+            "any");
+        managedCriteria.Add(anyRidCriteria);
 
         //  Create asset file
         //  Note that we know that the package type for the lock file is DotnetTool because we just set it to that.

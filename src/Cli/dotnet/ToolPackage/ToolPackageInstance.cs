@@ -163,10 +163,15 @@ internal class ToolPackageInstance : IToolPackage
         DirectoryPath packageDirectory,
         DirectoryPath assetsJsonParentDirectory, IFileSystem fileSystem)
     {
-        var lockFile = new LockFileFormat().Read(assetsJsonParentDirectory.WithFile(AssetsFileName).Value);
+        var assetsFilePath = assetsJsonParentDirectory.WithFile(AssetsFileName).Value;
+        var lockFile = new LockFileFormat().Read(assetsFilePath);
         var lockFileTargetLibrary = FindLibraryInLockFile(lockFile);
+        if (lockFileTargetLibrary == null)
+        {
+            throw new ToolPackageException(
+                string.Format(CliStrings.FailedToFindLibraryInAssetsFile, id, assetsFilePath));
+        }
         return DeserializeToolConfiguration(lockFileTargetLibrary, packageDirectory, id, fileSystem);
-
     }
 
     private static ToolConfiguration DeserializeToolConfiguration(LockFileTargetLibrary library, DirectoryPath packageDirectory, PackageId packageId, IFileSystem fileSystem)
@@ -180,7 +185,7 @@ internal class ToolPackageInstance : IToolPackage
                 // Load available frameworks from the package to provide better error messages
                 var installPath = new VersionFolderPathResolver(packageDirectory.Value).GetInstallPath(library.Name, library.Version);
                 var toolsPackagePath = Path.Combine(installPath, "tools");
-                
+
                 if (fileSystem.Directory.Exists(toolsPackagePath))
                 {
                     var availableFrameworks = fileSystem.Directory.EnumerateDirectories(toolsPackagePath)
