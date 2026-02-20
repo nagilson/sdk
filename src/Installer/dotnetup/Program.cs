@@ -1,6 +1,7 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.CommandLine;
 using System.Diagnostics;
 using Microsoft.DotNet.Tools.Bootstrapper.Telemetry;
 
@@ -14,8 +15,18 @@ internal class DotnetupProgram
         // This is DEBUG-only and removes the --debug flag from args
         DotnetupDebugHelper.HandleDebugSwitch(ref args);
 
+        // Parse once — the ParseResult is used for notice suppression and invocation.
+        var parseResult = Parser.Parse(args);
+
+        // --version is a simple machine-readable query — skip telemetry and the
+        // first-run notice entirely so scripts get a clean, fast response.
+        if (IsVersionRequest(parseResult))
+        {
+            return Parser.Invoke(parseResult);
+        }
+
         // Show first-run telemetry notice if needed
-        FirstRunNotice.ShowIfFirstRun(DotnetupTelemetry.Instance.Enabled);
+        FirstRunNotice.ShowIfFirstRun(DotnetupTelemetry.Instance.Enabled, parseResult);
 
         // Start root activity for the entire process
         using var rootActivity = DotnetupTelemetry.Instance.Enabled
@@ -24,7 +35,7 @@ internal class DotnetupProgram
 
         try
         {
-            var result = Parser.Invoke(args);
+            var result = Parser.Invoke(parseResult);
             rootActivity?.SetTag("exit.code", result);
             rootActivity?.SetStatus(result == 0 ? ActivityStatusCode.Ok : ActivityStatusCode.Error);
             return result;
@@ -48,5 +59,19 @@ internal class DotnetupProgram
             DotnetupTelemetry.Instance.Flush();
             DotnetupTelemetry.Instance.Dispose();
         }
+    }
+
+    /// <summary>
+    /// Detects whether the parsed command line is a --version request.
+    /// System.CommandLine handles --version via a built-in option on the root command.
+    /// </summary>
+    private static bool IsVersionRequest(ParseResult parseResult)
+    {
+        // System.CommandLine adds a --version option to RootCommand automatically.
+        // When the user passes --version, the root command's VersionOption will be present.
+        var versionOption = parseResult.RootCommandResult.Command.Options
+            .FirstOrDefault(o => o.Name == "version");
+        return versionOption is not null
+            && parseResult.GetResult(versionOption) is { Implicit: false };
     }
 }

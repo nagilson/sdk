@@ -188,7 +188,8 @@ public class ParserTests
         // Should succeed
         exitCode.Should().Be(0);
 
-        // Output should match Parser.Version
+        // --version is machine-readable: stdout should contain only the version,
+        // with no first-run telemetry notice contamination.
         output.Trim().Should().Be(Parser.Version);
     }
 

@@ -135,12 +135,36 @@ internal static class DotnetupTestUtilities
     }
 
     /// <summary>
-    /// Runs the dotnetup executable as a separate process
+    /// Runs the dotnetup executable as a separate process.
     /// </summary>
-    /// <param name="args">Command line arguments for dotnetup</param>
-    /// <param name="captureOutput">Whether to capture and return the output</param>
-    /// <returns>A tuple with exit code and captured output (if requested)</returns>
-    public static (int exitCode, string output) RunDotnetupProcess(string[] args, bool captureOutput = false, string? workingDirectory = null)
+    /// <param name="args">Command line arguments for dotnetup.</param>
+    /// <param name="captureOutput">Whether to capture and return the output.</param>
+    /// <param name="workingDirectory">Working directory for the process.</param>
+    /// <param name="environmentVariables">Additional environment variables to set.</param>
+    /// <returns>A tuple with exit code and captured stdout (if requested).</returns>
+    public static (int exitCode, string output) RunDotnetupProcess(
+        string[] args,
+        bool captureOutput = false,
+        string? workingDirectory = null,
+        Dictionary<string, string>? environmentVariables = null)
+    {
+        var (exitCode, stdout, _) = RunDotnetupProcessWithStreams(args, captureOutput, workingDirectory, environmentVariables);
+        return (exitCode, stdout);
+    }
+
+    /// <summary>
+    /// Runs the dotnetup executable as a separate process, returning stdout and stderr separately.
+    /// </summary>
+    /// <param name="args">Command line arguments for dotnetup.</param>
+    /// <param name="captureOutput">Whether to capture and return the output.</param>
+    /// <param name="workingDirectory">Working directory for the process.</param>
+    /// <param name="environmentVariables">Additional environment variables to set.</param>
+    /// <returns>A tuple with exit code, captured stdout, and captured stderr.</returns>
+    public static (int exitCode, string stdout, string stderr) RunDotnetupProcessWithStreams(
+        string[] args,
+        bool captureOutput = false,
+        string? workingDirectory = null,
+        Dictionary<string, string>? environmentVariables = null)
     {
         string dotnetupPath = GetDotnetupExecutablePath();
 
@@ -153,21 +177,30 @@ internal static class DotnetupTestUtilities
         process.StartInfo.RedirectStandardError = captureOutput;
         process.StartInfo.WorkingDirectory = workingDirectory ?? Environment.CurrentDirectory;
 
-        StringBuilder outputBuilder = new();
+        if (environmentVariables is not null)
+        {
+            foreach (var (key, value) in environmentVariables)
+            {
+                process.StartInfo.Environment[key] = value;
+            }
+        }
+
+        StringBuilder stdoutBuilder = new();
+        StringBuilder stderrBuilder = new();
         if (captureOutput)
         {
             process.OutputDataReceived += (sender, e) =>
             {
                 if (e.Data != null)
                 {
-                    outputBuilder.AppendLine(e.Data);
+                    stdoutBuilder.AppendLine(e.Data);
                 }
             };
             process.ErrorDataReceived += (sender, e) =>
             {
                 if (e.Data != null)
                 {
-                    outputBuilder.AppendLine(e.Data);
+                    stderrBuilder.AppendLine(e.Data);
                 }
             };
         }
@@ -181,7 +214,7 @@ internal static class DotnetupTestUtilities
         }
 
         process.WaitForExit();
-        return (process.ExitCode, outputBuilder.ToString());
+        return (process.ExitCode, stdoutBuilder.ToString(), stderrBuilder.ToString());
     }
 
     private static string GetRepositoryRoot()

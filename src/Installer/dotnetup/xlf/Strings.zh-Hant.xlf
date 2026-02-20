@@ -3,13 +3,13 @@
   <file datatype="xml" source-language="en" target-language="zh-Hant" original="../Strings.resx">
     <body>
       <trans-unit id="CommandInteractiveOptionDescription">
-        <source>Allows the command to stop and wait for user input or action.</source>
-        <target state="new">Allows the command to stop and wait for user input or action.</target>
+        <source>Allows the command to stop and wait for user input or action. When not set in CI environments or when output is redirected, the first-run telemetry notice is suppressed.</source>
+        <target state="new">Allows the command to stop and wait for user input or action. When not set in CI environments or when output is redirected, the first-run telemetry notice is suppressed.</target>
         <note />
       </trans-unit>
       <trans-unit id="FormatOptionDescription">
-        <source>Output format (text or json).</source>
-        <target state="new">Output format (text or json).</target>
+        <source>Output format (text or json). When set to json, the first-run telemetry notice is suppressed.</source>
+        <target state="new">Output format (text or json). When set to json, the first-run telemetry notice is suppressed.</target>
         <note />
       </trans-unit>
       <trans-unit id="InfoCommandDescription">

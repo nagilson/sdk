@@ -1,6 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.CommandLine;
+using Microsoft.DotNet.Tools.Bootstrapper.Commands.ElevatedAdminPath;
+using Microsoft.DotNet.Tools.Bootstrapper.Commands.PrintEnvScript;
+
 namespace Microsoft.DotNet.Tools.Bootstrapper.Telemetry;
 
 /// <summary>
@@ -19,7 +23,9 @@ internal static class FirstRunNotice
     /// and telemetry is enabled. Creates a sentinel file to prevent future notices.
     /// </summary>
     /// <param name="telemetryEnabled">Whether telemetry is currently enabled.</param>
-    public static void ShowIfFirstRun(bool telemetryEnabled)
+    /// <param name="parseResult">Parsed command-line result, used to suppress the notice for
+    /// machine-readable or non-interactive invocations.</param>
+    public static void ShowIfFirstRun(bool telemetryEnabled, ParseResult parseResult)
     {
         // Don't show notice if telemetry is disabled - user has already opted out
         if (!telemetryEnabled)
@@ -29,6 +35,13 @@ internal static class FirstRunNotice
 
         // Respect DOTNET_NOLOGO to suppress notice (same behavior as .NET SDK)
         if (IsNoLogoSet())
+        {
+            return;
+        }
+
+        // Suppress the notice for machine-readable or non-interactive invocations.
+        // The notice is intended for interactive terminal users only.
+        if (ShouldSuppressNotice(parseResult))
         {
             return;
         }
@@ -60,6 +73,57 @@ internal static class FirstRunNotice
         var value = Environment.GetEnvironmentVariable(NoLogoEnvironmentVariable);
         return string.Equals(value, "1", StringComparison.Ordinal) ||
                string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Determines whether the first-run notice should be suppressed based on the
+    /// parsed command-line result. The notice is suppressed for:
+    /// <list type="bullet">
+    ///   <item><c>--format json</c> — machine-readable structured output.</item>
+    ///   <item><c>print-env-script</c> — outputs a shell script, not for humans.</item>
+    ///   <item><c>elevatedadminpath</c> — internal plumbing command.</item>
+    ///   <item>Install/update commands when running in non-interactive mode
+    ///         (<c>--interactive</c> not explicitly passed and the default evaluates
+    ///         to non-interactive in CI / redirected environments).</item>
+    /// </list>
+    /// Note: <c>--version</c> is handled earlier in <see cref="DotnetupProgram.Main"/>
+    /// which skips both telemetry and the first-run notice entirely.
+    /// </summary>
+    internal static bool ShouldSuppressNotice(ParseResult parseResult)
+    {
+        var command = parseResult.CommandResult.Command;
+
+        // Internal / script-emitting commands (compare by Command object identity)
+        if (command == PrintEnvScriptCommandParser.GetCommand() ||
+            command == ElevatedAdminPathCommandParser.GetCommand())
+        {
+            return true;
+        }
+
+        // Machine-readable JSON output: check if --format is resolved to Json.
+        // GetResult returns null if the option wasn't registered on the matched command.
+        if (parseResult.GetResult(CommonOptions.FormatOption) is { } formatResult &&
+            parseResult.GetValue(CommonOptions.FormatOption) == OutputFormat.Json)
+        {
+            return true;
+        }
+
+        // Install/update commands: suppress when running non-interactively.
+        // The --interactive option defaults to false in CI or when stdout is redirected.
+        // Only suppress if the user did NOT explicitly pass --interactive.
+        if (parseResult.GetResult(CommonOptions.InteractiveOption) is { } interactiveResult)
+        {
+            bool isInteractive = parseResult.GetValue(CommonOptions.InteractiveOption);
+            bool explicitlySet = !interactiveResult.Implicit;
+
+            // Suppress notice only when non-interactive AND the user didn't explicitly request it
+            if (!isInteractive && !explicitlySet)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

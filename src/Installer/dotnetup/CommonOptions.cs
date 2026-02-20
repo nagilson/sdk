@@ -70,6 +70,6 @@ internal class CommonOptions
         Arity = ArgumentArity.ZeroOrOne
     };
 
-    private static bool IsCIEnvironmentOrRedirected() =>
+    internal static bool IsCIEnvironmentOrRedirected() =>
         new Cli.Telemetry.CIEnvironmentDetectorForTelemetry().IsCIEnvironment() || Console.IsOutputRedirected;
 }

@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using Microsoft.Dotnet.Installation.Internal;
+using Microsoft.DotNet.Tools.Bootstrapper;
 using Microsoft.DotNet.Tools.Bootstrapper.Telemetry;
 using Xunit;
 using UrlSanitizer = Microsoft.Dotnet.Installation.Internal.UrlSanitizer;
@@ -406,7 +407,7 @@ public class FirstRunNoticeTests : IDisposable
             Assert.NotNull(sentinelPath);
 
             // Simulate first run with telemetry enabled
-            FirstRunNotice.ShowIfFirstRun(telemetryEnabled: true);
+            FirstRunNotice.ShowIfFirstRun(telemetryEnabled: true, parseResult: Parser.Parse(Array.Empty<string>()));
 
             // Sentinel should now exist
             Assert.True(File.Exists(sentinelPath));
@@ -424,7 +425,7 @@ public class FirstRunNoticeTests : IDisposable
     public void ShowIfFirstRun_DoesNotCreateSentinel_WhenTelemetryDisabled()
     {
         // Simulate first run with telemetry disabled
-        FirstRunNotice.ShowIfFirstRun(telemetryEnabled: false);
+        FirstRunNotice.ShowIfFirstRun(telemetryEnabled: false, parseResult: Parser.Parse(Array.Empty<string>()));
 
         // Sentinel should NOT be created (user has opted out)
         var sentinelPath = DotnetupPaths.TelemetrySentinelPath;
