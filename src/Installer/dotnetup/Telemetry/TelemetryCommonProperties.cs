@@ -17,6 +17,7 @@ internal static class TelemetryCommonProperties
     private static readonly Lazy<string?> s_llmEnvironment = new(DetectLLMEnvironment);
     private static readonly Lazy<bool> s_isDevBuild = new(DetectDevBuild);
     private static readonly Lazy<string> s_dockerContainer = new(DetectDockerContainer);
+    private static readonly Lazy<string> s_machineId = new(GetMachineId);
 
     /// <summary>
     /// True when this process is running in a CI environment, as detected by
@@ -48,6 +49,7 @@ internal static class TelemetryCommonProperties
         {
             ["session.id"] = sessionId,
             ["device.id"] = s_deviceId.Value,
+            ["machine.id"] = s_machineId.Value,
             ["os.type"] = GetOSType(),
             ["os.platform"] = RuntimeInformation.OSDescription,
             ["os.version"] = Environment.OSVersion.VersionString,
@@ -179,6 +181,49 @@ internal static class TelemetryCommonProperties
         catch
         {
             return IsDockerContainer.Unknown.ToString("G");
+        }
+    }
+
+    /// <summary>
+    /// Returns a hashed machine ID that matches the SDK's "Machine ID" property
+    /// for cross-tool correlation. Reads from the same cache file the SDK writes
+    /// (<c>~/.dotnet/MachineId.v1.dotnetUserLevelCache</c>). Falls back to
+    /// computing a SHA256 hash of the MAC address via <c>NetworkInterface</c>
+    /// (same algorithm as the SDK's <c>MacAddressGetter</c> +
+    /// <c>Sha256Hasher</c>), or a new GUID if unavailable.
+    /// </summary>
+    private static string GetMachineId()
+    {
+        try
+        {
+            // Read from the SDK's cache file so dotnetup and dotnet share the same machine ID.
+            var cachePath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".dotnet",
+                "MachineId.v1.dotnetUserLevelCache");
+
+            if (File.Exists(cachePath))
+            {
+                var cached = File.ReadAllText(cachePath).Trim();
+                if (!string.IsNullOrEmpty(cached))
+                {
+                    return cached;
+                }
+            }
+
+            // Fallback: compute from MAC address using NetworkInterface API
+            // (same as MacAddressGetter.GetMacAddressByNetworkInterface in the SDK)
+            // and the same SHA256 hash as Sha256Hasher.Hash().
+            var macAddress = System.Net.NetworkInformation.NetworkInterface
+                .GetAllNetworkInterfaces()
+                .Select(nic => string.Join("-", nic.GetPhysicalAddress().GetAddressBytes().Select(b => b.ToString("X2", CultureInfo.InvariantCulture))))
+                .FirstOrDefault(addr => !string.IsNullOrEmpty(addr) && addr != "00-00-00-00-00-00");
+
+            return macAddress is not null ? Hash(macAddress) : Guid.NewGuid().ToString();
+        }
+        catch
+        {
+            return Guid.NewGuid().ToString();
         }
     }
 

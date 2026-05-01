@@ -83,6 +83,7 @@ public class TelemetryCommonPropertiesTests
 
         Assert.Contains("session.id", attributes.Keys);
         Assert.Contains("device.id", attributes.Keys);
+        Assert.Contains("machine.id", attributes.Keys);
         Assert.Contains("os.platform", attributes.Keys);
         Assert.Contains("os.version", attributes.Keys);
         Assert.Contains("os.type", attributes.Keys);
@@ -565,6 +566,7 @@ public class DotnetupTelemetryTests : IDisposable
         Assert.Equal("dotnetup", asDict["caller"]);
         Assert.Contains("session.id", asDict.Keys);
         Assert.Contains("device.id", asDict.Keys);
+        Assert.Contains("machine.id", asDict.Keys);
         Assert.Contains("os.type", asDict.Keys);
         Assert.Contains("os.platform", asDict.Keys);
         Assert.Contains("os.version", asDict.Keys);
@@ -617,6 +619,7 @@ public class DotnetupTelemetryTests : IDisposable
         Assert.Equal("session-abc", asDict["session.id"]);
         Assert.Contains("os.type", asDict.Keys);
         Assert.Contains("device.id", asDict.Keys);
+        Assert.Contains("machine.id", asDict.Keys);
         Assert.Contains("kernel.version", asDict.Keys);
         Assert.Contains("docker.container", asDict.Keys);
         Assert.Contains("dotnetup.version", asDict.Keys);
