@@ -37,7 +37,7 @@ public static class Parser
                 CommandLineInfo.PrintInfo();
                 return 0;
             }
-            parseResult.InvocationConfiguration.Output.WriteLine("Usage: dn [options]");
+            Reporter.Output.WriteLine("Usage: dn [options]");
             return 0;
         });
 
