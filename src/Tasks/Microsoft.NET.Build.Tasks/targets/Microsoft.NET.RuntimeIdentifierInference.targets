@@ -77,13 +77,18 @@ Copyright (c) .NET Foundation. All rights reserved.
     <PublishSelfContained>true</PublishSelfContained>
   </PropertyGroup>
 
-  <!-- Packing a tool runs the publish targets, so in that case set _IsPublishing to true -->
+  <!--
+       _IsPublishing is an SDK-internal flag that is set by the SDK's publish entry points (for example, dotnet publish).
+       It is not intended to be a general-purpose extensibility signal for arbitrary MSBuild logic.
+
+       Packing a tool runs the publish targets, so in that case set _IsPublishing to true.
+  -->
   <PropertyGroup Condition="'$(PackAsTool)' == 'true' And '$(_IsPacking)' == 'true'">
     <_IsPublishing>true</_IsPublishing>
   </PropertyGroup>
 
   <!-- Edit SelfContained to match the value of PublishSelfContained if we are publishing.
-       This Won't affect t:/Publish (because of _IsPublishing), and also won't override a global SelfContained property.-->
+       This won't affect t:/Publish unless the SDK publish flow has set _IsPublishing, and also won't override a global SelfContained property.-->
   <PropertyGroup Condition="'$(_IsPublishing)' == 'true' and ('$(PublishSelfContained)' == 'true' or '$(PublishSelfContained)' == 'false')">
     <SelfContained>$(PublishSelfContained)</SelfContained>
   </PropertyGroup>
@@ -93,7 +98,7 @@ Copyright (c) .NET Foundation. All rights reserved.
   ... So, we infer the RID for SelfContained regardless of the context.
 
   The other publish properties are specifically labelled Publish* and don't 'NEED' their RID unless we are doing a publish, so the RID inference
-  ... for these properties is limited to publishing only scenarios.
+  ... for these properties is limited to SDK publishing scenarios where _IsPublishing is set.
 
   .NET Tools that build RID-specific packages will also need a primary package without a RuntimeIdentifier, so we disable RID inference for them
   in order to build the primary package, but only when we are actually packing.
