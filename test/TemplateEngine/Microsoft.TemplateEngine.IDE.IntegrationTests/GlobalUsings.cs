@@ -5,6 +5,4 @@
 // which causes Assert and TestContext to be ambiguous. Pin to the MSTest types.
 global using Assert = Microsoft.VisualStudio.TestTools.UnitTesting.Assert;
 global using TestContext = Microsoft.VisualStudio.TestTools.UnitTesting.TestContext;
-
-// Verify.XunitV3 is still available transitively; pin Verify to MSTest.
 global using Verifier = VerifyMSTest.Verifier;

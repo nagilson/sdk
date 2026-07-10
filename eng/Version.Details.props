@@ -63,7 +63,6 @@ This file should be imported by eng/Versions.props
     <MicrosoftDotnetWinFormsProjectTemplatesPackageVersion>11.0.0-preview.7.26325.102</MicrosoftDotnetWinFormsProjectTemplatesPackageVersion>
     <MicrosoftDotNetWpfProjectTemplatesPackageVersion>11.0.0-preview.7.26325.102</MicrosoftDotNetWpfProjectTemplatesPackageVersion>
     <MicrosoftDotNetXliffTasksPackageVersion>11.0.0-beta.26325.102</MicrosoftDotNetXliffTasksPackageVersion>
-    <MicrosoftDotNetXUnitV3ExtensionsPackageVersion>11.0.0-beta.26325.102</MicrosoftDotNetXUnitV3ExtensionsPackageVersion>
     <MicrosoftExtensionsConfigurationIniPackageVersion>11.0.0-preview.7.26325.102</MicrosoftExtensionsConfigurationIniPackageVersion>
     <MicrosoftExtensionsDependencyInjectionAbstractionsPackageVersion>11.0.0-preview.7.26325.102</MicrosoftExtensionsDependencyInjectionAbstractionsPackageVersion>
     <MicrosoftExtensionsDependencyModelPackageVersion>11.0.0-preview.7.26325.102</MicrosoftExtensionsDependencyModelPackageVersion>
@@ -200,7 +199,6 @@ This file should be imported by eng/Versions.props
     <MicrosoftDotnetWinFormsProjectTemplatesVersion>$(MicrosoftDotnetWinFormsProjectTemplatesPackageVersion)</MicrosoftDotnetWinFormsProjectTemplatesVersion>
     <MicrosoftDotNetWpfProjectTemplatesVersion>$(MicrosoftDotNetWpfProjectTemplatesPackageVersion)</MicrosoftDotNetWpfProjectTemplatesVersion>
     <MicrosoftDotNetXliffTasksVersion>$(MicrosoftDotNetXliffTasksPackageVersion)</MicrosoftDotNetXliffTasksVersion>
-    <MicrosoftDotNetXUnitV3ExtensionsVersion>$(MicrosoftDotNetXUnitV3ExtensionsPackageVersion)</MicrosoftDotNetXUnitV3ExtensionsVersion>
     <MicrosoftExtensionsConfigurationIniVersion>$(MicrosoftExtensionsConfigurationIniPackageVersion)</MicrosoftExtensionsConfigurationIniVersion>
     <MicrosoftExtensionsDependencyInjectionAbstractionsVersion>$(MicrosoftExtensionsDependencyInjectionAbstractionsPackageVersion)</MicrosoftExtensionsDependencyInjectionAbstractionsVersion>
     <MicrosoftExtensionsDependencyModelVersion>$(MicrosoftExtensionsDependencyModelPackageVersion)</MicrosoftExtensionsDependencyModelVersion>

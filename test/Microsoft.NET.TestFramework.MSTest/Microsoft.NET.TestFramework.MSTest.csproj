@@ -64,14 +64,6 @@
       <_Parameter1>MicrosoftNETTestSdkPackageVersion</_Parameter1>
       <_Parameter2>$(MicrosoftNETTestSdkPackageVersion)</_Parameter2>
     </AssemblyAttribute>
-    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
-      <_Parameter1>XUnitPackageVersion</_Parameter1>
-      <_Parameter2>$(XUnitVersion)</_Parameter2>
-    </AssemblyAttribute>
-    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
-      <_Parameter1>XUnitRunnerVisualStudioPackageVersion</_Parameter1>
-      <_Parameter2>$(XUnitRunnerVisualStudioPackageVersion)</_Parameter2>
-    </AssemblyAttribute>
   </ItemGroup>
 
   <ItemGroup>
@@ -113,7 +105,7 @@
          deferred): the Attributes/* discovery attributes, the IMessageSink-based logger bridges,
          and the ctor-injection base classes (SdkTest, AspNetSdkTest). -->
     <Compile Include="$(SharedTestFrameworkDir)**\*.cs"
-             Exclude="$(SharedTestFrameworkDir)Attributes\**\*.cs;$(SharedTestFrameworkDir)SharedTestOutputHelper.cs;$(SharedTestFrameworkDir)TestLoggerFactory.cs;$(SharedTestFrameworkDir)SdkTest.cs;$(SharedTestFrameworkDir)AspNetSdkTest.cs;$(SharedTestFrameworkDir)bin\**\*.cs;$(SharedTestFrameworkDir)obj\**\*.cs"
+             Exclude="$(SharedTestFrameworkDir)Attributes\**\*.cs;$(SharedTestFrameworkDir)ITestOutputHelper.cs;$(SharedTestFrameworkDir)bin\**\*.cs;$(SharedTestFrameworkDir)obj\**\*.cs"
              LinkBase="Shared" />
 
     <!-- This project's own MSTest-specific sources. -->

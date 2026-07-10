@@ -7,11 +7,9 @@
   <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
 
   <PropertyGroup>
-    <!-- PackageReference to xunit defaults IsTestProject to true, which we don't want for TestFramework
-         If IsTestProject is true, then Arcade automatically adds a reference to Microsoft.NET.Test.Sdk,
-         which sets the OutputType to Exe, which is what we use to determine whether a project should
-         have the common Program.cs included.  We don't want that in this project to avoid type conflicts
-         with the actual test projects that reference it.
+    <!-- Keep IsTestProject=false so that Arcade does not automatically add a reference to
+         Microsoft.NET.Test.Sdk (which sets OutputType=Exe). This is a shared library that is
+         referenced by test projects, not a runnable test project itself.
     -->
     <IsTestProject>false</IsTestProject>
 
@@ -43,14 +41,6 @@
       <_Parameter1>MicrosoftNETTestSdkPackageVersion</_Parameter1>
       <_Parameter2>$(MicrosoftNETTestSdkPackageVersion)</_Parameter2>
     </AssemblyAttribute>
-    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
-      <_Parameter1>XUnitPackageVersion</_Parameter1>
-      <_Parameter2>$(XUnitVersion)</_Parameter2>
-    </AssemblyAttribute>
-    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
-      <_Parameter1>XUnitRunnerVisualStudioPackageVersion</_Parameter1>
-      <_Parameter2>$(XUnitRunnerVisualStudioPackageVersion)</_Parameter2>
-    </AssemblyAttribute>
   </ItemGroup>
 
   <ItemGroup>
@@ -60,13 +50,10 @@
     -->
 
     <PackageReference Include="DiffPlex" />
-    <PackageReference Include="Microsoft.DotNet.XUnitV3Extensions" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" />
     <PackageReference Include="Microsoft.Extensions.Logging" />
     <PackageReference Include="Newtonsoft.Json" />
     <PackageReference Include="System.IO.Hashing" />
-    <PackageReference Include="xunit.v3.assert" VersionOverride="$(XUnitV3Version)" />
-    <PackageReference Include="xunit.v3.extensibility.core" />
     <PackageReference Include="AwesomeAssertions" />
 
     <Using Include="FluentAssertions" />
@@ -75,7 +62,6 @@
     <Using Include="Microsoft.NET.TestFramework.Commands" />
     <Using Include="Microsoft.NET.TestFramework.ProjectConstruction" />
     <Using Include="Microsoft.NET.TestFramework.Utilities" />
-    <Using Include="Xunit" />
   </ItemGroup>
 
   <!-- Packages that are in-box for .NET Core, so we only need to reference them for .NET Framework -->
