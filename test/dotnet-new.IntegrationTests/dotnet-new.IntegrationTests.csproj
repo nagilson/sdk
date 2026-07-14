@@ -18,24 +18,6 @@
     <ProjectReference Include="$(TemplateEngSrcDir)Tools\Microsoft.TemplateEngine.Authoring.TemplateVerifier\Microsoft.TemplateEngine.Authoring.TemplateVerifier.csproj" />
   </ItemGroup>
 
-  <!-- Suppress xUnit compile-time types that leak transitively from TemplateVerifier/TestHelper.
-       Without ExcludeAssets="compile", Xunit.ITestOutputHelper and Xunit.TestContext would
-       conflict with Microsoft.NET.TestFramework.ITestOutputHelper and the MSTest TestContext. -->
-  <ItemGroup>
-    <PackageReference Include="xunit.abstractions" VersionOverride="2.0.3" ExcludeAssets="compile;build;contentfiles" />
-    <PackageReference Include="xunit.v3.common" VersionOverride="4.0.0-pre.81" ExcludeAssets="compile;build;contentfiles" />
-    <PackageReference Include="xunit.v3.assert" VersionOverride="4.0.0-pre.81" ExcludeAssets="compile;build;contentfiles" />
-    <PackageReference Include="xunit.v3.extensibility.core" ExcludeAssets="compile;build;contentfiles" />
-    <PackageReference Include="Verify.XunitV3" ExcludeAssets="compile;build;contentfiles" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <!-- Remove xUnit global usings injected transitively via Verify.XunitV3 / xunit packages -->
-    <Using Remove="Xunit" />
-    <Using Remove="VerifyXunit" />
-    <Using Remove="VerifyXunit.Verifier" />
-  </ItemGroup>
-
   <ItemGroup>
     <PackageReference Include="Microsoft.DotNet.Common.ProjectTemplates.6.0" VersionOverride="6.0.*" GeneratePathProperty="true" />
     <PackageReference Include="Microsoft.DotNet.Common.ProjectTemplates.7.0" VersionOverride="7.0.*-*" GeneratePathProperty="true" />

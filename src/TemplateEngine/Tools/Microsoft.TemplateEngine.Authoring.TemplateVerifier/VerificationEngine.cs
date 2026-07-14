@@ -34,8 +34,8 @@ namespace Microsoft.TemplateEngine.Authoring.TemplateVerifier
 
         /// <summary>
         /// Signature of a Verify directory-verification entry point. This intentionally mirrors the
-        /// shape of <c>VerifyXunit.Verifier.VerifyDirectory</c> and <c>VerifyMSTest.Verifier.VerifyDirectory</c>
-        /// (including their <see cref="SettingsTask"/> return type) so that either can be assigned directly
+        /// shape of <c>VerifyMSTest.Verifier.VerifyDirectory</c>
+        /// (including its <see cref="SettingsTask"/> return type) so that it can be assigned directly
         /// as a method group.
         /// </summary>
         public delegate SettingsTask VerifyDirectoryDelegate(
@@ -51,10 +51,9 @@ namespace Microsoft.TemplateEngine.Authoring.TemplateVerifier
         /// <summary>
         /// The test-framework-specific Verify directory verifier used by the built-in (non-custom)
         /// verification path. This must be set by the consuming test project to its framework's
-        /// <c>Verifier.VerifyDirectory</c> (for example <c>VerifyXunit.Verifier.VerifyDirectory</c> or
-        /// <c>VerifyMSTest.Verifier.VerifyDirectory</c>) so snapshot verification resolves the ambient
-        /// test context of the active framework. When left unset, snapshot verification throws an
-        /// <see cref="InvalidOperationException"/>.
+        /// <c>Verifier.VerifyDirectory</c> (for example <c>VerifyMSTest.Verifier.VerifyDirectory</c>)
+        /// so snapshot verification resolves the ambient test context of the active framework. When
+        /// left unset, snapshot verification throws an <see cref="InvalidOperationException"/>.
         /// </summary>
         /// <remarks>
         /// This package intentionally does not depend on any test framework, so it cannot supply a
@@ -204,7 +203,7 @@ namespace Microsoft.TemplateEngine.Authoring.TemplateVerifier
             }
 
             // UseFileName replaces the entire type+method+parameters naming.
-            // This prevents Verify.XunitV3 from auto-appending [Theory] parameters
+            // This prevents Verify from auto-appending [Theory] parameters
             // to snapshot file paths, which breaks matching since TemplateVerifier
             // already manages naming uniqueness via ScenarioName.
             string scenarioPrefix = options.DoNotPrependTemplateNameToScenarioName ? string.Empty : options.TemplateName;

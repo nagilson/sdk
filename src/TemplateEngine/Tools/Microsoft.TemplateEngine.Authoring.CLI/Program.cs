@@ -13,11 +13,10 @@ namespace Microsoft.TemplateEngine.Authoring.CLI
         internal static Task<int> Main(string[] args)
         {
             // TemplateVerifier no longer ships with a built-in verifier, so the hosting application must
-            // supply one. Route snapshot directory verification through the xUnit (v3) Verify integration,
-            // which is the verifier this tool has always used.
+            // supply one. Route snapshot directory verification through the MSTest Verify integration.
             VerificationEngine.DirectoryVerifier ??=
                 (path, include, pattern, options, settings, info, fileScrubber, sourceFile)
-                    => VerifyXunit.Verifier.VerifyDirectory(path, include, pattern, options, settings, info, fileScrubber, sourceFile);
+                    => VerifyMSTest.Verifier.VerifyDirectory(path, include, pattern, options, settings, info, fileScrubber, sourceFile);
 
             RootCommand rootCommand = new("dotnet-template-authoring");
             rootCommand.Subcommands.Add(new LocalizeCommand());
