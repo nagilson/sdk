@@ -5,12 +5,14 @@
 
 using Microsoft.Build.Framework;
 using Microsoft.DotNet.Cli.Commands.MSBuild;
+using Microsoft.DotNet.Cli.Utils;
 
 namespace Microsoft.DotNet.Cli.MSBuild.Tests
 {
+    [TestClass]
     public class GivenMSBuildLogger
     {
-        [Fact]
+        [TestMethod]
         public void ItBlocksTelemetryThatIsNotInTheList()
         {
             var fakeTelemetry = new FakeTelemetry();
@@ -28,7 +30,7 @@ namespace Microsoft.DotNet.Cli.MSBuild.Tests
             fakeTelemetry.LogEntry.Should().BeNull();
         }
 
-        [Fact]
+        [TestMethod]
         public void ItDoesNotMasksExceptionTelemetry()
         {
             var fakeTelemetry = new FakeTelemetry();
@@ -44,13 +46,14 @@ namespace Microsoft.DotNet.Cli.MSBuild.Tests
 
             MSBuildLogger.FormatAndSend(fakeTelemetry, telemetryEventArgs);
 
+            fakeTelemetry.LogEntry.Should().NotBeNull();
             fakeTelemetry.LogEntry.EventName.Should().Be(MSBuildLogger.SdkTaskBaseCatchExceptionTelemetryEventName);
             fakeTelemetry.LogEntry.Properties.Keys.Count.Should().Be(2);
             fakeTelemetry.LogEntry.Properties["exceptionType"].Should().Be("System.Exception");
             fakeTelemetry.LogEntry.Properties["detail"].Should().Be("Exception detail");
         }
 
-        [Fact]
+        [TestMethod]
         public void ItDoesNotMaskPublishPropertiesTelemetry()
         {
             var fakeTelemetry = new FakeTelemetry();
@@ -72,7 +75,7 @@ namespace Microsoft.DotNet.Cli.MSBuild.Tests
             fakeTelemetry.LogEntry.Properties["otherProperty"].Should().Be("otherProperty value");
         }
 
-        [Fact]
+        [TestMethod]
         public void ItDoesNotMaskReadyToRunTelemetry()
         {
             var fakeTelemetry = new FakeTelemetry();
@@ -95,7 +98,7 @@ namespace Microsoft.DotNet.Cli.MSBuild.Tests
         }
 
         // Reproduce https://github.com/dotnet/sdk/issues/3868
-        [Fact]
+        [TestMethod]
         public void ItCanSendProperties()
         {
             var fakeTelemetry = new FakeTelemetry();
@@ -108,20 +111,109 @@ namespace Microsoft.DotNet.Cli.MSBuild.Tests
                     { "RuntimeIdentifier", "null"},
                     { "SelfContained", "null"},
                     { "UseApphost", "null"},
-                    { "OutputType", "Library"},
+                    { "OutputType", "Library"}
                 }
             };
 
             MSBuildLogger.FormatAndSend(fakeTelemetry, telemetryEventArgs);
 
-            fakeTelemetry.LogEntry.Properties.Should().BeEquivalentTo(new Dictionary<string, string>
+            fakeTelemetry.LogEntry.Properties.Should().BeEquivalentTo(telemetryEventArgs.Properties);
+        }
+
+        [TestMethod]
+        public void ItAggregatesEvents()
+        {
+            var fakeTelemetry = new FakeTelemetry();
+            fakeTelemetry.Enabled = true;
+            var logger = new MSBuildLogger(fakeTelemetry);
+
+            var event1 = new TelemetryEventArgs
+            {
+                EventName = MSBuildLogger.TaskFactoryTelemetryAggregatedEventName,
+                Properties = new Dictionary<string, string>
                 {
-                    { "TargetFrameworkVersion", "9a871d7066260764d4cb5047e4b10570271d04bd1da275681a4b12bce0b27496"},
-                    { "RuntimeIdentifier", "fb329000228cc5a24c264c57139de8bf854fc86fc18bf1c04ab61a2b5cb4b921"},
-                    { "SelfContained", "fb329000228cc5a24c264c57139de8bf854fc86fc18bf1c04ab61a2b5cb4b921"},
-                    { "UseApphost", "fb329000228cc5a24c264c57139de8bf854fc86fc18bf1c04ab61a2b5cb4b921"},
-                    { "OutputType", "d77982267d9699c2a57bcab5bb975a1935f6427002f52fd4569762fd72db3a94"},
-                });
+                    { "AssemblyTaskFactoryTasksExecutedCount", "2" },
+                    { "RoslynCodeTaskFactoryTasksExecutedCount", "1" }
+                }
+            };
+
+            var event2 = new TelemetryEventArgs
+            {
+                EventName = MSBuildLogger.TaskFactoryTelemetryAggregatedEventName,
+                Properties = new Dictionary<string, string>
+                {
+                    { "AssemblyTaskFactoryTasksExecutedCount", "3" },
+                    { "CustomTaskFactoryTasksExecutedCount", "2" }
+                }
+            };
+
+            var event3 = new TelemetryEventArgs
+            {
+                EventName = MSBuildLogger.TasksTelemetryAggregatedEventName,
+                Properties = new Dictionary<string, string>
+                {
+                    { "TasksExecutedCount", "3" },
+                    { "TaskHostTasksExecutedCount", "2" }
+                }
+            };
+
+            var event4 = new TelemetryEventArgs
+            {
+                EventName = MSBuildLogger.TasksTelemetryAggregatedEventName,
+                Properties = new Dictionary<string, string>
+                {
+                    { "TasksExecutedCount", "5" }
+                }
+            };
+
+            logger.AggregateEvent(event1);
+            logger.AggregateEvent(event2);
+            logger.AggregateEvent(event3);
+            logger.AggregateEvent(event4);
+
+            logger.SendAggregatedEventsOnBuildFinished(fakeTelemetry);
+
+            fakeTelemetry.LogEntries.Should().HaveCount(2);
+
+            var taskFactoryEntry = fakeTelemetry.LogEntries.FirstOrDefault(e => e.EventName == $"msbuild/{MSBuildLogger.TaskFactoryTelemetryAggregatedEventName}");
+            taskFactoryEntry.Should().NotBeNull();
+            taskFactoryEntry.Properties["AssemblyTaskFactoryTasksExecutedCount"].Should().Be("5"); // 2 + 3
+            taskFactoryEntry.Properties["RoslynCodeTaskFactoryTasksExecutedCount"].Should().Be("1"); // 1 + 0
+            taskFactoryEntry.Properties["CustomTaskFactoryTasksExecutedCount"].Should().Be("2"); // 0 + 2
+
+            var tasksEntry = fakeTelemetry.LogEntries.FirstOrDefault(e => e.EventName == $"msbuild/{MSBuildLogger.TasksTelemetryAggregatedEventName}");
+            tasksEntry.Should().NotBeNull();
+            tasksEntry.Properties["TasksExecutedCount"].Should().Be("8"); // 3 + 5
+            tasksEntry.Properties["TaskHostTasksExecutedCount"].Should().Be("2"); // 2 + 0
+        }
+
+        [TestMethod]
+        public void ItIgnoresNonIntegerPropertiesDuringAggregation()
+        {
+            var fakeTelemetry = new FakeTelemetry();
+            fakeTelemetry.Enabled = true;
+            var logger = new MSBuildLogger(fakeTelemetry);
+            
+            var eventArgs = new TelemetryEventArgs
+            {
+                EventName = MSBuildLogger.TaskFactoryTelemetryAggregatedEventName,
+                Properties = new Dictionary<string, string>
+                {
+                    { "AssemblyTaskFactoryTasksExecutedCount", "3" },
+                    { "InvalidProperty", "not-a-number" },
+                    { "InvalidProperty2", "1.234" },
+                }
+            };
+
+            logger.AggregateEvent(eventArgs);
+
+            logger.SendAggregatedEventsOnBuildFinished(fakeTelemetry);
+
+            fakeTelemetry.LogEntry.Should().NotBeNull();
+            fakeTelemetry.LogEntry.EventName.Should().Be($"msbuild/{MSBuildLogger.TaskFactoryTelemetryAggregatedEventName}");
+            fakeTelemetry.LogEntry.Properties["AssemblyTaskFactoryTasksExecutedCount"].Should().Be("3");
+            fakeTelemetry.LogEntry.Properties.Should().NotContainKey("InvalidProperty");
+            fakeTelemetry.LogEntry.Properties.Should().NotContainKey("InvalidProperty2");
         }
     }
 }

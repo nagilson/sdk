@@ -5,19 +5,20 @@ using Microsoft.DotNet.Tools.Test.Utilities;
 
 namespace Microsoft.DotNet.Cli.Test.Tests
 {
+    [TestClass]
     public class GivenDotnettestBuildsAndRunsTestFromDll : SdkTest
     {
-        public GivenDotnettestBuildsAndRunsTestFromDll(ITestOutputHelper log) : base(log)
+        public GivenDotnettestBuildsAndRunsTestFromDll()
         {
         }
 
         private readonly string[] ConsoleLoggerOutputNormal = new[] { "--logger", "console;verbosity=normal" };
 
-        [Fact]
+        [TestMethod]
         public void TestsFromAGivenContainerShouldRunWithExpectedOutput()
         {
             var testAppName = "VSTestCore";
-            var testAsset = _testAssetsManager.CopyTestAsset(testAppName)
+            var testAsset = TestAssetsManager.CopyTestAsset(testAppName)
                 .WithSource()
                 .WithVersionVariables();
 
@@ -36,7 +37,7 @@ namespace Microsoft.DotNet.Cli.Test.Tests
             // Call vstest
             var result = new DotnetTestCommand(Log, disableNewOutput: false)
                 .Execute(outputDll, "--logger:console;verbosity=normal");
-            if (!TestContext.IsLocalized())
+            if (!SdkTestContext.IsLocalized())
             {
                 result.StdOut
                     .Should().Contain("Total tests: 2")
@@ -49,11 +50,11 @@ namespace Microsoft.DotNet.Cli.Test.Tests
             result.ExitCode.Should().Be(1);
         }
 
-        [Fact]
+        [TestMethod]
         public void ItSetsDotnetRootToTheLocationOfDotnetExecutableWhenRunningDotnetTestWithDll()
         {
             var testAppName = "VSTestCore";
-            var testAsset = _testAssetsManager.CopyTestAsset(testAppName)
+            var testAsset = TestAssetsManager.CopyTestAsset(testAppName)
                 .WithSource()
                 .WithVersionVariables();
 
@@ -79,11 +80,11 @@ namespace Microsoft.DotNet.Cli.Test.Tests
             result.StartInfo.EnvironmentVariables[dotnetRoot].Should().Be(Path.GetDirectoryName(dotnet));
         }
 
-        [Fact]
+        [TestMethod]
         public void TestsFromAGivenContainerAndArchSwitchShouldFlowToVsTestConsole()
         {
             var testAppName = "VSTestCore";
-            var testAsset = _testAssetsManager.CopyTestAsset(testAppName)
+            var testAsset = TestAssetsManager.CopyTestAsset(testAppName)
                 .WithSource()
                 .WithVersionVariables();
 
@@ -100,7 +101,7 @@ namespace Microsoft.DotNet.Cli.Test.Tests
             // Call vstest
             var result = new DotnetTestCommand(Log, disableNewOutput: true)
                 .Execute(outputDll, "--arch", "wrongArchitecture");
-            if (!TestContext.IsLocalized())
+            if (!SdkTestContext.IsLocalized())
             {
                 result.StdErr.Should().StartWith("Invalid platform type: wrongArchitecture. Valid platform types are ");
             }
@@ -108,13 +109,13 @@ namespace Microsoft.DotNet.Cli.Test.Tests
             result.ExitCode.Should().Be(1);
         }
 
-        [Theory]
-        [InlineData("-e:foo=bardll")]
-        [InlineData("-e:foo=barexe")]
+        [TestMethod]
+        [DataRow("-e:foo=bardll")]
+        [DataRow("-e:foo=barexe")]
         public void MissingOutputDllAndArgumentsEndWithDllOrExeShouldFailInMSBuild(string arg)
         {
             var testAppName = "VSTestCore";
-            var testAsset = _testAssetsManager.CopyTestAsset(testAppName)
+            var testAsset = TestAssetsManager.CopyTestAsset(testAppName)
                 .WithSource()
                 .WithVersionVariables();
 
@@ -124,7 +125,7 @@ namespace Microsoft.DotNet.Cli.Test.Tests
 
             var result = new DotnetTestCommand(Log, disableNewOutput: true)
                 .Execute(arg);
-            if (!TestContext.IsLocalized())
+            if (!SdkTestContext.IsLocalized())
             {
                 result.StdOut.Should().Contain("MSBUILD : error MSB1003: Specify a project or solution file. The current working directory does not contain a project or solution file.");
             }

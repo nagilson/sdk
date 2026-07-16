@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Microsoft.DotNet.Cli;
@@ -7,16 +7,11 @@ using Parser = Microsoft.DotNet.Cli.Parser;
 
 namespace Microsoft.DotNet.Tests.ParserTests
 {
+    [TestClass]
     public class ToolSearchParserTests
     {
-        private readonly ITestOutputHelper output;
 
-        public ToolSearchParserTests(ITestOutputHelper output)
-        {
-            this.output = output;
-        }
-
-        [Fact]
+        [TestMethod]
         public void DotnetToolSearchShouldThrowWhenNoSearchTerm()
         {
             var result = Parser.Parse("dotnet tool search");
@@ -24,19 +19,19 @@ namespace Microsoft.DotNet.Tests.ParserTests
             a.Should().Throw<CommandParsingException>();
         }
 
-        [Fact]
+        [TestMethod]
         public void ListSearchParserCanGetArguments()
         {
             var result = Parser.Parse("dotnet tool search mytool --detail --skip 3 --take 4 --prerelease");
 
-            var packageId = result.GetValue<string>(ToolSearchCommandParser.SearchTermArgument);
+            var definition = Assert.IsExactInstanceOfType<ToolSearchCommandDefinition>(result.CommandResult.Command);
 
-            packageId.Should().Be("mytool");
+            result.GetValue(definition.SearchTermArgument).Should().Be("mytool");
             result.UnmatchedTokens.Should().BeEmpty();
-            result.GetValue<bool>(ToolSearchCommandParser.DetailOption).Should().Be(true);
-            result.GetValue<string>(ToolSearchCommandParser.SkipOption).Should().Be("3");
-            result.GetValue<string>(ToolSearchCommandParser.TakeOption).Should().Be("4");
-            result.GetValue<bool>(ToolSearchCommandParser.PrereleaseOption).Should().Be(true);
+            result.GetValue(definition.DetailOption).Should().Be(true);
+            result.GetValue(definition.SkipOption).Should().Be("3");
+            result.GetValue(definition.TakeOption).Should().Be("4");
+            result.GetValue(definition.PrereleaseOption).Should().Be(true);
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #nullable disable
@@ -21,7 +21,7 @@ namespace Microsoft.DotNet.MsiInstallerTests
         protected string WorkloadSetPreviousBandVersion => _testWorkloadSetVersions.Value.GetValueOrDefault("previousbandversion", "8.0.204");
 
         protected override bool NeedsIncludePreviews => bool.Parse(_testWorkloadSetVersions.Value.GetValueOrDefault("needsIncludePreviews", "false"));
-        public WorkloadSetTestsBase(ITestOutputHelper log) : base(log)
+        public WorkloadSetTestsBase()
         {
             _testWorkloadSetVersions = new Lazy<Dictionary<string, string>>(() =>
             {
@@ -142,7 +142,7 @@ namespace Microsoft.DotNet.MsiInstallerTests
         //  Moves workload set packages for a given version from C:\SdkTesting\WorkloadSets to C:\SdkTesting\DisabledWorkloadSets
         protected void RemoveWorkloadSetFromLocalSource(string workloadSetVersion)
         {
-            var packageVersion = WorkloadSetVersion.ToWorkloadSetPackageVersion(workloadSetVersion, out var sdkFeatureBand);
+            var sdkFeatureBand = SdkFeatureBand.FromWorkloadSetVersion(workloadSetVersion, out var packageVersion);
 
             VM.CreateActionGroup($"Disable {workloadSetVersion}",
                 VM.CreateRunCommand("cmd", "/c", "mkdir", @"c:\SdkTesting\DisabledWorkloadSets"),

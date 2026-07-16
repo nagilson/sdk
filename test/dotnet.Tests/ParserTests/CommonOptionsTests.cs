@@ -6,28 +6,32 @@ using Microsoft.DotNet.Cli;
 
 namespace Microsoft.DotNet.Tests.ParserTests;
 
+[TestClass]
 public class CommonOptionsTests
 {
-    [Fact]
+    [TestMethod]
     public void Duplicates()
     {
         var command = new RootCommand();
-        command.Options.Add(CommonOptions.EnvOption);
+        var option = CommonOptions.CreateEnvOption();
+
+        command.Options.Add(option);
 
         var result = command.Parse(["-e", "A=1", "-e", "A=2"]);
 
-        result.GetValue(CommonOptions.EnvOption)
+        result.GetValue(option)
             .Should()
             .BeEquivalentTo(new Dictionary<string, string> { ["A"] = "2" });
 
         result.Errors.Should().BeEmpty();
     }
 
-    [Fact]
+    [TestMethod]
     public void Duplicates_CasingDifference()
     {
         var command = new RootCommand();
-        command.Options.Add(CommonOptions.EnvOption);
+        var option = CommonOptions.CreateEnvOption();
+        command.Options.Add(option);
 
         var result = command.Parse(["-e", "A=1", "-e", "a=2"]);
 
@@ -43,22 +47,23 @@ public class CommonOptionsTests
             expected.Add("a", "2");
         }
 
-        result.GetValue(CommonOptions.EnvOption)
+        result.GetValue(option)
             .Should()
             .BeEquivalentTo(expected);
 
         result.Errors.Should().BeEmpty();
     }
 
-    [Fact]
+    [TestMethod]
     public void MultiplePerToken()
     {
         var command = new RootCommand();
-        command.Options.Add(CommonOptions.EnvOption);
+        var option = CommonOptions.CreateEnvOption();
+        command.Options.Add(option);
 
         var result = command.Parse(["-e", "A=1;B=2,C=3 D=4", "-e", "B==Y=", "-e", "C;=;"]);
 
-        result.GetValue(CommonOptions.EnvOption)
+        result.GetValue(option)
             .Should()
             .BeEquivalentTo(new Dictionary<string, string>
             {
@@ -70,45 +75,48 @@ public class CommonOptionsTests
         result.Errors.Should().BeEmpty();
     }
 
-    [Fact]
+    [TestMethod]
     public void NoValue()
     {
         var command = new RootCommand();
-        command.Options.Add(CommonOptions.EnvOption);
+        var option = CommonOptions.CreateEnvOption();
+        command.Options.Add(option);
 
         var result = command.Parse(["-e", "A"]);
 
-        result.GetValue(CommonOptions.EnvOption)
+        result.GetValue(option)
             .Should()
             .BeEquivalentTo(new Dictionary<string, string> { ["A"] = "" });
 
         result.Errors.Should().BeEmpty();
     }
 
-    [Fact]
+    [TestMethod]
     public void WhitespaceTrimming()
     {
         var command = new RootCommand();
-        command.Options.Add(CommonOptions.EnvOption);
+        var option = CommonOptions.CreateEnvOption();
+        command.Options.Add(option);
 
         var result = command.Parse(["-e", " A \t\n\r\u2002 = X Y \t\n\r\u2002"]);
 
-        result.GetValue(CommonOptions.EnvOption)
+        result.GetValue(option)
             .Should()
             .BeEquivalentTo(new Dictionary<string, string> { ["A"] = " X Y \t\n\r\u2002" });
 
         result.Errors.Should().BeEmpty();
     }
 
-    [Theory]
-    [InlineData("")]
-    [InlineData("=")]
-    [InlineData("= X")]
-    [InlineData("  \u2002 = X")]
+    [TestMethod]
+    [DataRow("")]
+    [DataRow("=")]
+    [DataRow("= X")]
+    [DataRow("  \u2002 = X")]
     public void Errors(string token)
     {
         var command = new RootCommand();
-        command.Options.Add(CommonOptions.EnvOption);
+        var option = CommonOptions.CreateEnvOption();
+        command.Options.Add(option);
 
         var result = command.Parse(["-e", token]);
 

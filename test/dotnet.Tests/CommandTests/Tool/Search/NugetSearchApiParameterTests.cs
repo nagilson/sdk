@@ -4,34 +4,40 @@
 using Microsoft.DotNet.Cli.Utils;
 using Microsoft.DotNet.Cli.NugetSearch;
 using Parser = Microsoft.DotNet.Cli.Parser;
+using Microsoft.DotNet.Cli.Commands.Tool.Search;
 
 namespace dotnet.Tests.ToolSearchTests
 {
+    [TestClass]
     public class NugetSearchApiParameterTests
     {
-        [Fact]
+        [TestMethod]
         public void ItShouldValidateSkipType()
         {
             var result = Parser.Parse("dotnet tool search mytool --skip wrongtype");
-            Action a = () => new NugetSearchApiParameter(result);
+
+            var command = new ToolSearchCommand(result);
+            Action a = () => command.GetNugetSearchApiParameter();
             a.Should().Throw<GracefulException>();
         }
 
-        [Fact]
+        [TestMethod]
         public void ItShouldValidateTakeType()
         {
             var result = Parser.Parse("dotnet tool search mytool --take wrongtype");
 
-            Action a = () => new NugetSearchApiParameter(result);
+            var command = new ToolSearchCommand(result);
+            Action a = () => command.GetNugetSearchApiParameter();
             a.Should().Throw<GracefulException>();
         }
 
-        [Fact]
+        [TestMethod]
         public void ItShouldNotThrowWhenInputIsValid()
         {
             var parseResult = Parser.Parse("dotnet tool search mytool --detail --skip 3 --take 4 --prerelease");
 
-            var result = new NugetSearchApiParameter(parseResult);
+            var command = new ToolSearchCommand(parseResult);
+            var result = command.GetNugetSearchApiParameter();
             result.Prerelease.Should().Be(true);
             result.Skip.Should().Be(3);
             result.Take.Should().Be(4);

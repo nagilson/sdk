@@ -8,27 +8,28 @@ using Microsoft.DotNet.Cli.Utils;
 
 namespace Microsoft.DotNet.Tests
 {
+    [TestClass]
     public class GivenAProjectDependencyCommandResolver : SdkTest
     {
         private string _configuration;
 
-        public GivenAProjectDependencyCommandResolver(ITestOutputHelper log) : base(log)
+        public GivenAProjectDependencyCommandResolver()
         {
             Environment.SetEnvironmentVariable(
                 Constants.MSBUILD_EXE_PATH,
-                Path.Combine(TestContext.Current.ToolsetUnderTest.SdkFolderUnderTest, "MSBuild.dll"));
+                Path.Combine(SdkTestContext.Current.ToolsetUnderTest.SdkFolderUnderTest, "MSBuild.dll"));
 
             _configuration = Environment.GetEnvironmentVariable("CONFIGURATION") ?? "Debug";
         }
 
-        [Fact]
+        [TestMethod]
         public void ItReturnsACommandSpecWhenToolIsInAProjectRef()
         {
             var testAsset =
-                _testAssetsManager.CopyTestAsset("TestAppWithProjDepTool")
+                TestAssetsManager.CopyTestAsset("TestAppWithProjDepTool")
                     .WithSource();
 
-            NuGetConfigWriter.Write(testAsset.Path, TestContext.Current.TestPackages);
+            NuGetConfigWriter.Write(testAsset.Path, SdkTestContext.Current.TestPackages);
 
             new DotnetBuildCommand(Log)
                 .WithWorkingDirectory(testAsset.Path)
@@ -56,14 +57,14 @@ namespace Microsoft.DotNet.Tests
             result.Args.Should().Contain(commandResolverArguments.CommandName);
         }
 
-        [Fact]
+        [TestMethod]
         public void ItPassesDepsfileArgToHostWhenReturningACommandSpecForMSBuildProject()
         {
             var testAsset =
-                _testAssetsManager.CopyTestAsset("TestAppWithProjDepTool")
+                TestAssetsManager.CopyTestAsset("TestAppWithProjDepTool")
                     .WithSource();
 
-            NuGetConfigWriter.Write(testAsset.Path, TestContext.Current.TestPackages);
+            NuGetConfigWriter.Write(testAsset.Path, SdkTestContext.Current.TestPackages);
 
             new DotnetBuildCommand(Log)
                 .WithWorkingDirectory(testAsset.Path)
@@ -87,14 +88,14 @@ namespace Microsoft.DotNet.Tests
             result.Args.Should().Contain("--depsfile");
         }
 
-        [Fact]
+        [TestMethod]
         public void ItReturnsNullWhenCommandNameDoesNotExistInProjectDependenciesForMSBuildProject()
         {
             var testAsset =
-                _testAssetsManager.CopyTestAsset("TestAppWithProjDepTool")
+                TestAssetsManager.CopyTestAsset("TestAppWithProjDepTool")
                     .WithSource();
 
-            NuGetConfigWriter.Write(testAsset.Path, TestContext.Current.TestPackages);
+            NuGetConfigWriter.Write(testAsset.Path, SdkTestContext.Current.TestPackages);
 
             new RestoreCommand(testAsset)
                 .Execute()
@@ -116,14 +117,14 @@ namespace Microsoft.DotNet.Tests
             result.Should().BeNull();
         }
 
-        [Fact]
+        [TestMethod]
         public void ItSetsDepsfileToOutputInCommandspecForMSBuild()
         {
             var testAsset =
-                _testAssetsManager.CopyTestAsset("TestAppWithProjDepTool")
+                TestAssetsManager.CopyTestAsset("TestAppWithProjDepTool")
                     .WithSource();
 
-            NuGetConfigWriter.Write(testAsset.Path, TestContext.Current.TestPackages);
+            NuGetConfigWriter.Write(testAsset.Path, SdkTestContext.Current.TestPackages);
 
             new RestoreCommand(testAsset)
                 .Execute()
@@ -163,7 +164,7 @@ namespace Microsoft.DotNet.Tests
         {
             Environment.SetEnvironmentVariable(
                 Constants.MSBUILD_EXE_PATH,
-                Path.Combine(TestContext.Current.ToolsetUnderTest.SdkFolderUnderTest, "MSBuild.dll"));
+                Path.Combine(SdkTestContext.Current.ToolsetUnderTest.SdkFolderUnderTest, "MSBuild.dll"));
 
             environment = environment ?? new EnvironmentProvider();
 

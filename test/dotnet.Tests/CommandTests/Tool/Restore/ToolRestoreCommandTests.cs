@@ -21,6 +21,7 @@ using Microsoft.DotNet.Cli.Commands;
 
 namespace Microsoft.DotNet.Tests.Commands.Tool
 {
+    [TestClass]
     public class ToolRestoreCommandTests: SdkTest
     {
         private readonly IFileSystem _fileSystem;
@@ -48,7 +49,7 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
 
         private int _installCalledCount = 0;
 
-        public ToolRestoreCommandTests(ITestOutputHelper log): base(log)
+        public ToolRestoreCommandTests()
         {
             _packageVersionA = NuGetVersion.Parse("1.0.4");
             _packageVersionWithCommandNameCollisionWithA = NuGetVersion.Parse("1.0.9");
@@ -108,7 +109,7 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
                     1);
         }
 
-        [Fact]
+        [TestMethod]
         public void WhenRunItCanSaveCommandsToCache()
         {
             IToolManifestFinder manifestFinder =
@@ -147,7 +148,7 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
                 .Should().BeTrue($"Cached command should be found at {restoredCommand.Executable.Value}");
         }
 
-        [Fact]
+        [TestMethod]
         public void WhenRunItCanSaveCommandsToCacheAndShowSuccessMessage()
         {
             IToolManifestFinder manifestFinder =
@@ -184,7 +185,7 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
                 "ansicolor code for green, message should be green");
         }
 
-        [Fact]
+        [TestMethod]
         public void WhenRestoredCommandHasTheSameCommandNameItThrows()
         {
             IToolManifestFinder manifestFinder =
@@ -241,7 +242,7 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
                 .Should().BeOneOf(allPossibleErrorMessage, "Run in parallel, no order guarantee");
         }
 
-        [Fact]
+        [TestMethod]
         public void WhenSomePackageFailedToRestoreItCanRestorePartiallySuccessful()
         {
             IToolManifestFinder manifestFinder =
@@ -284,7 +285,7 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
                 .Should().BeTrue("Existing package will succeed despite other package failed");
         }
 
-        [Fact]
+        [TestMethod]
         public void ItShouldFailWhenPackageCommandNameDoesNotMatchManifestCommands()
         {
             ToolCommandName differentCommandNameA = new("different-command-nameA");
@@ -314,10 +315,10 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
                             "\"different-command-nameA\" \"different-command-nameB\"", _packageIdA, "a")));
         }
 
-        [Fact]
+        [TestMethod]
         public void ItRestoresMultipleTools()
         {
-            var testDir = _testAssetsManager.CreateTestDirectory().Path;
+            var testDir = TestAssetsManager.CreateTestDirectory().Path;
 
             string configContents = """
                 {
@@ -387,10 +388,10 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
             public string PathToExecutable { get; set; }
         }
 
-        [Fact]
+        [TestMethod]
         public void ItRestoresCorrectToolVersion()
         {
-            var testDir = _testAssetsManager.CreateTestDirectory().Path;
+            var testDir = TestAssetsManager.CreateTestDirectory().Path;
 
             string configContents = """
                 {
@@ -434,7 +435,7 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
             rows[0].Version.Should().Be("8.0.0-rc.1.23419.6");
         }
 
-        [Fact]
+        [TestMethod]
         public void WhenCannotFindManifestFileItPrintsWarning()
         {
             IToolManifestFinder realManifestFinderImplementationWithMockFinderSystem =
@@ -455,7 +456,7 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
                     l.Contains(string.Format(CliStrings.CannotFindAManifestFile, "")));
         }
 
-        [Fact]
+        [TestMethod]
         public void WhenPackageIsRestoredAlreadyItWillNotRestoreItAgain()
         {
             IToolManifestFinder manifestFinder =
@@ -483,7 +484,7 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
             _installCalledCount.Should().Be(installCallCountBeforeTheSecondRestore);
         }
 
-        [Fact]
+        [TestMethod]
         public void WhenPackageIsRestoredAlreadyButDllIsRemovedItRestoresAgain()
         {
             IToolManifestFinder manifestFinder =
@@ -512,7 +513,7 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
             _installCalledCount.Should().Be(installCallCountBeforeTheSecondRestore + 1);
         }
 
-        [Fact]
+        [TestMethod]
         public void WhenRunWithoutManifestFileItShouldPrintSpecificRestoreErrorMessage()
         {
             IToolManifestFinder manifestFinder =
@@ -530,6 +531,176 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
 
             _reporter.Lines.Should().Contain(l =>
                 l.Contains(AnsiExtensions.Yellow(CliCommandStrings.NoToolsWereRestored)));
+        }
+
+        [TestMethod]
+        public void WhenNewerVersionIsAvailableItShowsWarning()
+        {
+            // Use an explicit version to prevent test from breaking if _packageVersionA changes
+            var currentVersion = NuGetVersion.Parse("1.0.0");
+            var newerPackageVersion = NuGetVersion.Parse("2.1.4");
+            var manifestPackage = new ToolManifestPackage(
+                _packageIdA,
+                currentVersion,
+                new[] { _toolCommandNameA },
+                new DirectoryPath(_temporaryDirectory),
+                rollForward: false);
+
+            // Create a mock feed with both the current version and a newer version
+            var feeds = new List<MockFeed>
+            {
+                new MockFeed
+                {
+                    Type = MockFeedType.FeedFromGlobalNugetConfig,
+                    Packages = new List<MockFeedPackage>
+                    {
+                        new MockFeedPackage
+                        {
+                            PackageId = _packageIdA.ToString(),
+                            Version = currentVersion.ToNormalizedString(),
+                            ToolCommandName = _toolCommandNameA.Value,
+                        },
+                        new MockFeedPackage
+                        {
+                            PackageId = _packageIdA.ToString(),
+                            Version = newerPackageVersion.ToNormalizedString(),
+                            ToolCommandName = _toolCommandNameA.Value,
+                        }
+                    }
+                }
+            };
+
+            var toolPackageDownloaderMockWithFeeds = new ToolPackageDownloaderMock(
+                _toolPackageStore, _fileSystem, feeds: feeds);
+
+            IToolManifestFinder fakeManifestFinder =
+                new MockManifestFinder(new[] { manifestPackage });
+
+            ToolRestoreCommand toolRestoreCommand = new(_parseResult,
+                toolPackageDownloaderMockWithFeeds,
+                fakeManifestFinder,
+                _localToolsResolverCache,
+                _fileSystem,
+                _reporter
+            );
+
+            toolRestoreCommand.Execute().Should().Be(0);
+
+            _reporter.Lines.Should().Contain(l =>
+                l.Contains(string.Format(CliCommandStrings.RestoreNewVersionAvailable, _packageIdA, newerPackageVersion.ToNormalizedString())));
+        }
+
+        [TestMethod]
+        public void WhenCurrentVersionIsPrereleaseAndNewerStableIsAvailableItShowsWarning()
+        {
+            var currentPrereleaseVersion = NuGetVersion.Parse("1.0.0-rc1");
+            var newerStableVersion = NuGetVersion.Parse("1.0.0");
+            var manifestPackage = new ToolManifestPackage(
+                _packageIdA,
+                currentPrereleaseVersion,
+                new[] { _toolCommandNameA },
+                new DirectoryPath(_temporaryDirectory),
+                rollForward: false);
+
+            // Create a mock feed with both the prerelease version and a newer stable version
+            var feeds = new List<MockFeed>
+            {
+                new MockFeed
+                {
+                    Type = MockFeedType.FeedFromGlobalNugetConfig,
+                    Packages = new List<MockFeedPackage>
+                    {
+                        new MockFeedPackage
+                        {
+                            PackageId = _packageIdA.ToString(),
+                            Version = currentPrereleaseVersion.ToNormalizedString(),
+                            ToolCommandName = _toolCommandNameA.Value,
+                        },
+                        new MockFeedPackage
+                        {
+                            PackageId = _packageIdA.ToString(),
+                            Version = newerStableVersion.ToNormalizedString(),
+                            ToolCommandName = _toolCommandNameA.Value,
+                        }
+                    }
+                }
+            };
+
+            var toolPackageDownloaderMockWithFeeds = new ToolPackageDownloaderMock(
+                _toolPackageStore, _fileSystem, feeds: feeds);
+
+            IToolManifestFinder fakeManifestFinder =
+                new MockManifestFinder(new[] { manifestPackage });
+
+            ToolRestoreCommand toolRestoreCommand = new(_parseResult,
+                toolPackageDownloaderMockWithFeeds,
+                fakeManifestFinder,
+                _localToolsResolverCache,
+                _fileSystem,
+                _reporter
+            );
+
+            toolRestoreCommand.Execute().Should().Be(0);
+
+            _reporter.Lines.Should().Contain(l =>
+                l.Contains(string.Format(CliCommandStrings.RestoreNewVersionAvailable, _packageIdA, newerStableVersion.ToNormalizedString())));
+        }
+
+        [TestMethod]
+        public void WhenCurrentVersionIsStableAndNewerPrereleaseIsAvailableItDoesNotShowWarning()
+        {
+            var currentStableVersion = NuGetVersion.Parse("1.0.0");
+            var newerPrereleaseVersion = NuGetVersion.Parse("1.1.0-rc1");
+            var manifestPackage = new ToolManifestPackage(
+                _packageIdA,
+                currentStableVersion,
+                new[] { _toolCommandNameA },
+                new DirectoryPath(_temporaryDirectory),
+                rollForward: false);
+
+            // Create a mock feed with both the stable version and a newer prerelease version
+            var feeds = new List<MockFeed>
+            {
+                new MockFeed
+                {
+                    Type = MockFeedType.FeedFromGlobalNugetConfig,
+                    Packages = new List<MockFeedPackage>
+                    {
+                        new MockFeedPackage
+                        {
+                            PackageId = _packageIdA.ToString(),
+                            Version = currentStableVersion.ToNormalizedString(),
+                            ToolCommandName = _toolCommandNameA.Value,
+                        },
+                        new MockFeedPackage
+                        {
+                            PackageId = _packageIdA.ToString(),
+                            Version = newerPrereleaseVersion.ToNormalizedString(),
+                            ToolCommandName = _toolCommandNameA.Value,
+                        }
+                    }
+                }
+            };
+
+            var toolPackageDownloaderMockWithFeeds = new ToolPackageDownloaderMock(
+                _toolPackageStore, _fileSystem, feeds: feeds);
+
+            IToolManifestFinder fakeManifestFinder =
+                new MockManifestFinder(new[] { manifestPackage });
+
+            ToolRestoreCommand toolRestoreCommand = new(_parseResult,
+                toolPackageDownloaderMockWithFeeds,
+                fakeManifestFinder,
+                _localToolsResolverCache,
+                _fileSystem,
+                _reporter
+            );
+
+            toolRestoreCommand.Execute().Should().Be(0);
+
+            // Should NOT contain warning about the prerelease version
+            _reporter.Lines.Should().NotContain(l =>
+                l.Contains(string.Format(CliCommandStrings.RestoreNewVersionAvailable, _packageIdA, newerPrereleaseVersion.ToNormalizedString())));
         }
 
         private class MockManifestFinder : IToolManifestFinder

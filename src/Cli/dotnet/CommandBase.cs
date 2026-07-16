@@ -15,15 +15,17 @@ public abstract class CommandBase
     protected CommandBase(ParseResult parseResult)
     {
         _parseResult = parseResult;
-        ShowHelpOrErrorIfAppropriate(parseResult);
+        parseResult.ShowHelpOrErrorIfAppropriate();
     }
 
     protected CommandBase() { }
 
-    protected virtual void ShowHelpOrErrorIfAppropriate(ParseResult parseResult)
-    {
-        parseResult.ShowHelpOrErrorIfAppropriate();
-    }
 
     public abstract int Execute();
+}
+
+public abstract class CommandBase<TDefinition>(ParseResult parseResult) : CommandBase(parseResult)
+    where TDefinition : Command
+{
+    protected TDefinition Definition { get; } = (TDefinition)parseResult.CommandResult.Command;
 }

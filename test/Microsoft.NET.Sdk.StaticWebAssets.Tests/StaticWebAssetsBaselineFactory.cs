@@ -1,8 +1,12 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #nullable disable
 
+using Microsoft.NET.TestFramework;
+using Microsoft.NET.TestFramework.Commands;
+using Microsoft.NET.TestFramework.Assertions;
+using Microsoft.NET.TestFramework.Utilities;
 using System.Runtime.Versioning;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.StaticWebAssets.Tasks;
@@ -30,12 +34,16 @@ public partial class StaticWebAssetsBaselineFactory
     [GeneratedRegex("""(.*\.)([0123456789abcdefghijklmnopqrstuvwxyz]{10})(\.modules\.json)((?:\.gz)|(?:\.br))?$""", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex JSModuleManifestRegex();
 
+    [GeneratedRegex("""(.*\.)([0123456789abcdefghijklmnopqrstuvwxyz]{10})(\.map)((?:\.gz)|(?:\.br))?$""", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex SourceMapFileRegex();
+
     private static readonly IList<(Regex expression, string replacement)> WellKnownFileNamePatternsAndReplacements =
     [
         (ScopedProjectBundleRegex(),"$1__fingerprint__$3$4"),
         (ScopedAppBundleRegex(),"$1__fingerprint__$3$4"),
         (JSInitializerRegex(), "$1__fingerprint__$3$4"),
         (JSModuleManifestRegex(), "$1__fingerprint__$3$4"),
+        (SourceMapFileRegex(), "$1__fingerprint__$3$4"),
         (EmbeddedFingerprintExpression(), "#[.{fingerprint=__fingerprint__}]$1"),
         (FingerprintedSiteCssRegex(), "fingerprint-site$1__fingerprint__$3$4"),
     ];
@@ -302,6 +310,8 @@ public partial class StaticWebAssetsBaselineFactory
                 TemplatizeNugetPath(restorePath, fromPackage),
             var fromProject when projectPath is not null && file.StartsWith(projectPath, StringComparison.OrdinalIgnoreCase) =>
                 TemplatizeProjectPath(projectPath, fromProject, runtimeIdentifier),
+            var fromWebAssemblySdk when file.Replace('\\', '/').Contains("/Sdks/Microsoft.NET.Sdk.WebAssembly", StringComparison.OrdinalIgnoreCase) =>
+                TemplatizeWebAssemblySdkPath(fromWebAssemblySdk),
             _ =>
                 ReplaceSegments(file, (i, segments) => i switch
                 {
@@ -312,6 +322,35 @@ public partial class StaticWebAssetsBaselineFactory
         };
 
         return ReplaceFileName(updated).Replace('/', '\\');
+    }
+
+    private string TemplatizeWebAssemblySdkPath(string file)
+    {
+        var normalized = file.Replace('\\', '/');
+        var marker = "/Sdks/Microsoft.NET.Sdk.WebAssembly";
+        var idx = normalized.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (idx < 0)
+        {
+            return file;
+        }
+
+        // Replace everything up to and including the SDK folder with the token
+        var remainder = normalized.Substring(idx + marker.Length);
+        if (remainder.StartsWith('/'))
+        {
+            remainder = remainder[1..];
+        }
+
+        var templated = "${WebAssemblySdkPath}" + (string.IsNullOrEmpty(remainder) ? string.Empty : "/" + remainder);
+
+        // Replace filename hashes if any
+        templated = ReplaceSegments(templated, (i, segments) => i switch
+        {
+            _ when i == segments.Length - 1 => RemovePossibleHash(segments[i]),
+            _ => segments[i]
+        });
+
+        return templated;
     }
 
     private static string ReplaceFileName(string path)

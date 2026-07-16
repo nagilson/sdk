@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
+using System.Diagnostics.CodeAnalysis;
+using Microsoft.DotNet.Cli.CommandLine;
 using Microsoft.DotNet.Cli.Commands.Restore;
 using Microsoft.DotNet.Cli.Commands.Run;
 using Microsoft.DotNet.Cli.Extensions;
@@ -9,6 +11,7 @@ using Microsoft.DotNet.Cli.Utils;
 
 namespace Microsoft.DotNet.Cli.Commands.Publish;
 
+[RequiresDynamicCode("Uses MSBuild Object Model types, which are not AOT-safe")]
 public class PublishCommand : RestoringCommand
 {
     private PublishCommand(
@@ -21,29 +24,27 @@ public class PublishCommand : RestoringCommand
 
     public static CommandBase FromArgs(string[] args, string? msbuildPath = null)
     {
-        var parseResult = Parser.Parse(["dotnet", "publish", ..args]);
+        var parseResult = Parser.Parse(["dotnet", "publish", .. args]);
         return FromParseResult(parseResult);
     }
 
     public static CommandBase FromParseResult(ParseResult parseResult, string? msbuildPath = null)
     {
+        var definition = (PublishCommandDefinition)parseResult.CommandResult.Command;
+
         parseResult.HandleDebugSwitch();
         parseResult.ShowHelpOrErrorIfAppropriate();
 
-        string[] args = parseResult.GetValue(PublishCommandParser.SlnOrProjectOrFileArgument) ?? [];
+        CommonOptions.ValidateSelfContainedOptions(parseResult.HasOption(definition.SelfContainedOption),
+            parseResult.HasOption(definition.NoSelfContainedOption));
 
-        LoggerUtility.SeparateBinLogArguments(args, out var binLogArgs, out var nonBinLogArgs);
+        bool noBuild = parseResult.HasOption(definition.NoBuildOption);
 
-        CommonOptions.ValidateSelfContainedOptions(parseResult.HasOption(PublishCommandParser.SelfContainedOption),
-            parseResult.HasOption(PublishCommandParser.NoSelfContainedOption));
+        bool noRestore = noBuild || parseResult.HasOption(definition.NoRestoreOption);
 
-        bool noBuild = parseResult.HasOption(PublishCommandParser.NoBuildOption);
-
-        bool noRestore = noBuild || parseResult.HasOption(PublishCommandParser.NoRestoreOption);
-
-        return CommandFactory.CreateVirtualOrPhysicalCommand(
-            PublishCommandParser.GetCommand(),
-            PublishCommandParser.SlnOrProjectOrFileArgument,
+        return DotNetCommandFactory.CreateVirtualOrPhysicalCommand(
+            definition,
+            definition.SlnOrProjectOrFileArgument,
             (msbuildArgs, appFilePath) => new VirtualProjectBuildingCommand(
                 entryPointFileFullPath: Path.GetFullPath(appFilePath),
                 msbuildArgs: msbuildArgs)
@@ -57,17 +58,24 @@ public class PublishCommand : RestoringCommand
                 noRestore: noRestore,
                 msbuildPath: msbuildPath
             ),
-            [CommonOptions.PropertiesOption, CommonOptions.RestorePropertiesOption, PublishCommandParser.TargetOption, PublishCommandParser.VerbosityOption],
+            optionsToUseWhenParsingMSBuildFlags:
+            [
+                CommonOptions.CreatePropertyOption(),
+                CommonOptions.CreateRestorePropertyOption(),
+                PublishCommandDefinition.CreateTargetOption(),
+                CommonOptions.CreateVerbosityOption(),
+                CommonOptions.CreateNoLogoOption()
+            ],
             parseResult,
             msbuildPath,
-            (msbuildArgs) =>
+            transformer: (msbuildArgs, nonLoggerArgs) =>
             {
                 var options = new ReleasePropertyProjectLocator.DependentCommandOptions(
-                        nonBinLogArgs,
-                        parseResult.HasOption(PublishCommandParser.ConfigurationOption) ? parseResult.GetValue(PublishCommandParser.ConfigurationOption) : null,
-                        parseResult.HasOption(PublishCommandParser.FrameworkOption) ? parseResult.GetValue(PublishCommandParser.FrameworkOption) : null
+                        nonLoggerArgs,
+                        parseResult.HasOption(definition.ConfigurationOption) ? parseResult.GetValue(definition.ConfigurationOption) : null,
+                        parseResult.HasOption(definition.FrameworkOption) ? parseResult.GetValue(definition.FrameworkOption) : null
                     );
-                var projectLocator = new ReleasePropertyProjectLocator(parseResult, MSBuildPropertyNames.PUBLISH_RELEASE, options);
+                var projectLocator = new ReleasePropertyProjectLocator(msbuildArgs.GlobalProperties, MSBuildPropertyNames.PUBLISH_RELEASE, options);
                 var releaseModeProperties = projectLocator.GetCustomDefaultConfigurationValueIfSpecified();
                 return msbuildArgs.CloneWithAdditionalProperties(releaseModeProperties);
             }
