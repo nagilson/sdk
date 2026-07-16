@@ -1,44 +1,43 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine.Parsing;
-using Microsoft.DotNet.Cli.Commands.Package;
-using Microsoft.DotNet.Cli.Commands.Reference.Add;
+using Microsoft.DotNet.Cli;
+using Microsoft.DotNet.Cli.Commands.Hidden.Add.Reference;
 using Microsoft.DotNet.Cli.Utils;
 using Parser = Microsoft.DotNet.Cli.Parser;
 
 namespace Microsoft.DotNet.Tests.ParserTests
 {
+    [TestClass]
     public class AddReferenceParserTests
     {
-        private readonly ITestOutputHelper output;
 
-        public AddReferenceParserTests(ITestOutputHelper output)
-        {
-            this.output = output;
-        }
-
-        [Fact]
+        [TestMethod]
         public void AddReferenceHasDefaultArgumentSetToCurrentDirectory()
         {
             var result = Parser.Parse(["dotnet", "add", "reference", "my.csproj"]);
 
-            result.GetValue<string>(PackageCommandParser.ProjectOrFileArgument)
+            var command = Assert.IsExactInstanceOfType<AddReferenceCommandDefinition>(result.CommandResult.Command);
+
+            result.GetValue(command.Parent.ProjectOrFileArgument)
                 .Should()
                 .BeEquivalentTo(
-                    PathUtility.EnsureTrailingSlash(Directory.GetCurrentDirectory()));
+                    PathUtilities.EnsureTrailingSlash(Directory.GetCurrentDirectory()));
         }
 
-        [Fact]
+        [TestMethod]
         public void AddReferenceHasInteractiveFlag()
         {
             var result = Parser.Parse(["dotnet", "add", "reference", "my.csproj", "--interactive"]);
 
-            result.GetValue<bool>(ReferenceAddCommandParser.InteractiveOption)
+            var command = Assert.IsExactInstanceOfType<AddReferenceCommandDefinition>(result.CommandResult.Command);
+
+            result.GetValue(command.InteractiveOption)
                 .Should().BeTrue();
         }
 
-        [Fact]
+        [TestMethod]
         public void AddReferenceWithoutArgumentResultsInAnError()
         {
             var result = Parser.Parse(["dotnet", "add", "reference"]);
@@ -47,7 +46,8 @@ namespace Microsoft.DotNet.Tests.ParserTests
 
             var argument = (result.Errors.SingleOrDefault()?.SymbolResult as ArgumentResult)?.Argument;
 
-            argument.Should().Be(ReferenceAddCommandParser.ProjectPathArgument);
+            var command = Assert.IsExactInstanceOfType<AddReferenceCommandDefinition>(result.CommandResult.Command);
+            argument.Should().Be(command.ProjectPathArgument);
         }
     }
 }

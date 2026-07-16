@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Microsoft.DotNet.Cli.Commands.Tool.List;
@@ -6,38 +6,36 @@ using Parser = Microsoft.DotNet.Cli.Parser;
 
 namespace Microsoft.DotNet.Tests.ParserTests
 {
+    [TestClass]
     public class ListToolParserTests
     {
-        private readonly ITestOutputHelper output;
 
-        public ListToolParserTests(ITestOutputHelper output)
-        {
-            this.output = output;
-        }
-
-        [Fact]
+        [TestMethod]
         public void ListToolParserCanGetGlobalOption()
         {
             var result = Parser.Parse("dotnet tool list -g");
 
-            result.GetValue<bool>(ToolListCommandParser.GlobalOption).Should().Be(true);
+            var definition = Assert.IsExactInstanceOfType<ToolListCommandDefinition>(result.CommandResult.Command);
+            result.GetValue(definition.LocationOptions.GlobalOption).Should().Be(true);
         }
 
-        [Fact]
+        [TestMethod]
         public void ListToolParserCanGetLocalOption()
         {
             var result = Parser.Parse("dotnet tool list --local");
 
-            result.GetValue<bool>(ToolListCommandParser.LocalOption).Should().Be(true);
+            var definition = Assert.IsExactInstanceOfType<ToolListCommandDefinition>(result.CommandResult.Command);
+            result.GetValue(definition.LocationOptions.LocalOption).Should().Be(true);
         }
 
-        [Fact]
+        [TestMethod]
         public void ListToolParserCanParseToolPathOption()
         {
             var result =
                 Parser.Parse(@"dotnet tool list --tool-path C:\Tools ");
 
-            result.GetValue<string>(ToolListCommandParser.ToolPathOption).Should().Be(@"C:\Tools");
+            var definition = Assert.IsExactInstanceOfType<ToolListCommandDefinition>(result.CommandResult.Command);
+            result.GetValue(definition.LocationOptions.ToolPathOption).Should().Be(@"C:\Tools");
         }
     }
 }

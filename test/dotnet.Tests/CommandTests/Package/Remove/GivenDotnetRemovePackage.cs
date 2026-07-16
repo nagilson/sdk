@@ -6,6 +6,7 @@ using Microsoft.DotNet.Cli.Utils;
 
 namespace Microsoft.DotNet.Cli.Remove.Package.Tests
 {
+    [TestClass]
     public class GivenDotnetRemovePackage : SdkTest
     {
         private Func<string, string> HelpText = (defaultVal) => $@"Description:
@@ -15,7 +16,7 @@ Usage:
   dotnet remove [<PROJECT | FILE>] package <PACKAGE_NAME>... [options]
 
 Arguments:
-  <PROJECT | FILE>  The project file or C# file-based app to operate on. If a file is not specified, the command will search the current directory for a project file. [default: {PathUtility.EnsureTrailingSlash(defaultVal)}]
+  <PROJECT | FILE>  The project file or C# file-based app to operate on. If a file is not specified, the command will search the current directory for a project file. [default: {PathUtilities.EnsureTrailingSlash(defaultVal)}]
   <PACKAGE_NAME>    The package reference to remove.
 
 Options:
@@ -29,7 +30,7 @@ Usage:
   dotnet remove <PROJECT | FILE> [command] [options]
 
 Arguments:
-  <PROJECT | FILE>  The project file or C# file-based app to operate on. If a file is not specified, the command will search the current directory for a project file. [default: {PathUtility.EnsureTrailingSlash(defaultVal)}]
+  <PROJECT | FILE>  The project file or C# file-based app to operate on. If a file is not specified, the command will search the current directory for a project file. [default: {PathUtilities.EnsureTrailingSlash(defaultVal)}]
 
 Options:
   -?, -h, --help    Show command line help.
@@ -38,13 +39,13 @@ Commands:
   package <PACKAGE_NAME>      Remove a NuGet package reference from the project.
   reference <PROJECT_PATH>    Remove a project-to-project reference from the project";
 
-        public GivenDotnetRemovePackage(ITestOutputHelper log) : base(log)
+        public GivenDotnetRemovePackage()
         {
         }
 
-        [Theory]
-        [InlineData("--help")]
-        [InlineData("-h")]
+        [TestMethod]
+        [DataRow("--help")]
+        [DataRow("-h")]
         public void WhenHelpOptionIsPassedItPrintsUsage(string helpArg)
         {
             var cmd = new DotnetCommand(Log).Execute($"remove", "package", helpArg);
@@ -52,9 +53,9 @@ Commands:
             cmd.StdOut.Should().BeVisuallyEquivalentToIfNotLocalized(HelpText(Directory.GetCurrentDirectory()));
         }
 
-        [Theory]
-        [InlineData("")]
-        [InlineData("unknownCommandName")]
+        [TestMethod]
+        [DataRow("")]
+        [DataRow("unknownCommandName")]
         public void WhenNoCommandIsPassedItPrintsError(string commandName)
         {
             var cmd = new DotnetCommand(Log)
@@ -63,10 +64,10 @@ Commands:
             cmd.StdErr.Should().Be(CliStrings.RequiredCommandNotPassed);
         }
 
-        [Fact]
+        [TestMethod]
         public void WhenReferencedPackageIsPassedItGetsRemoved()
         {
-            var projectDirectory = _testAssetsManager
+            var projectDirectory = TestAssetsManager
                 .CopyTestAsset("TestAppSimple")
                 .WithSource().Path;
 
@@ -86,10 +87,37 @@ Commands:
             remove.StdErr.Should().BeEmpty();
         }
 
-        [Fact]
+        [TestMethod]
+        public void WhenReferencedPackageIsRemovedUsingPositionalProjectArgumentItGetsRemoved()
+        {
+            const string testAsset = "TestAppSimple";
+            var projectDirectory = TestAssetsManager
+                .CopyTestAsset(testAsset)
+                .WithSource().Path;
+
+            var packageName = "Newtonsoft.Json";
+            var projectFilePath = Path.Combine(projectDirectory, $"{testAsset}.csproj");
+            var parentDirectory = Directory.GetParent(projectDirectory)!.FullName;
+            var relativeProjectPath = Path.GetRelativePath(parentDirectory, projectFilePath);
+
+            new DotnetCommand(Log)
+                .WithWorkingDirectory(projectDirectory)
+                .Execute("add", "package", packageName)
+                .Should().Pass();
+
+            var remove = new DotnetCommand(Log)
+                .WithWorkingDirectory(parentDirectory)
+                .Execute("remove", relativeProjectPath, "package", packageName);
+
+            remove.Should().Pass();
+            remove.StdOut.Should().Contain($"Removing PackageReference for package '{packageName}' from project '{relativeProjectPath}'.");
+            remove.StdErr.Should().BeEmpty();
+        }
+
+        [TestMethod]
         public void FileBasedApp()
         {
-            var testInstance = _testAssetsManager.CreateTestDirectory();
+            var testInstance = TestAssetsManager.CreateTestDirectory();
             var file = Path.Join(testInstance.Path, "Program.cs");
             File.WriteAllText(file, """
                 #:package Humanizer@2.14.1
@@ -101,17 +129,17 @@ Commands:
                 .WithWorkingDirectory(testInstance.Path)
                 .Execute()
                 .Should().Pass()
-                .And.HaveStdOut(string.Format(CliCommandStrings.DirectivesRemoved, "#:package", 1, "Humanizer", file));
+                .And.HaveStdOutContaining("Removing PackageReference for package 'Humanizer'");
 
             File.ReadAllText(file).Should().Be("""
                 Console.WriteLine();
                 """);
         }
 
-        [Fact]
+        [TestMethod]
         public void FileBasedApp_Multiple()
         {
-            var testInstance = _testAssetsManager.CreateTestDirectory();
+            var testInstance = TestAssetsManager.CreateTestDirectory();
             var file = Path.Join(testInstance.Path, "Program.cs");
             File.WriteAllText(file, """
                 #:package Humanizer@2.14.1
@@ -126,7 +154,7 @@ Commands:
                 .WithWorkingDirectory(testInstance.Path)
                 .Execute()
                 .Should().Pass()
-                .And.HaveStdOut(string.Format(CliCommandStrings.DirectivesRemoved, "#:package", 2, "Humanizer", file));
+                .And.HaveStdOutContaining("Removing PackageReference for package 'Humanizer'");
 
             File.ReadAllText(file).Should().Be("""
                 #:package Another@1.0.0
@@ -136,10 +164,10 @@ Commands:
                 """);
         }
 
-        [Fact]
+        [TestMethod]
         public void FileBasedApp_None()
         {
-            var testInstance = _testAssetsManager.CreateTestDirectory();
+            var testInstance = TestAssetsManager.CreateTestDirectory();
             var file = Path.Join(testInstance.Path, "Program.cs");
             File.WriteAllText(file, """
                 Console.WriteLine();
@@ -149,7 +177,7 @@ Commands:
                 .WithWorkingDirectory(testInstance.Path)
                 .Execute()
                 .Should().Fail()
-                .And.HaveStdOut(string.Format(CliCommandStrings.DirectivesRemoved, "#:package", 0, "Humanizer", file));
+                .And.HaveStdOutContaining("does not contain any PackageReference 'Humanizer' to Remove");
 
             File.ReadAllText(file).Should().Be("""
                 Console.WriteLine();

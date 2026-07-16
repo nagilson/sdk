@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #nullable disable
@@ -13,6 +13,7 @@ using Microsoft.DotNet.Cli;
 
 namespace Microsoft.DotNet.Tests
 {
+    [TestClass]
     public class GivenAProjectToolsCommandResolver : SdkTest
     {
         private static readonly NuGetFramework s_toolPackageFramework =
@@ -20,11 +21,11 @@ namespace Microsoft.DotNet.Tests
 
         private const string TestProjectName = "AppWithToolDependency";
 
-        public GivenAProjectToolsCommandResolver(ITestOutputHelper log) : base(log)
+        public GivenAProjectToolsCommandResolver()
         {
         }
 
-        [Fact]
+        [TestMethod]
         public void ItReturnsNullWhenCommandNameIsNull()
         {
             var projectToolsCommandResolver = SetupProjectToolsCommandResolver();
@@ -41,7 +42,7 @@ namespace Microsoft.DotNet.Tests
             result.Should().BeNull();
         }
 
-        [Fact]
+        [TestMethod]
         public void ItReturnsNullWhenProjectDirectoryIsNull()
         {
             var projectToolsCommandResolver = SetupProjectToolsCommandResolver();
@@ -58,12 +59,12 @@ namespace Microsoft.DotNet.Tests
             result.Should().BeNull();
         }
 
-        [Fact]
+        [TestMethod]
         public void ItReturnsNullWhenProjectDirectoryDoesNotContainAProjectFile()
         {
             var projectToolsCommandResolver = SetupProjectToolsCommandResolver();
 
-            var projectDirectory = _testAssetsManager.CreateTestDirectory();
+            var projectDirectory = TestAssetsManager.CreateTestDirectory();
 
             var commandResolverArguments = new CommandResolverArguments()
             {
@@ -77,15 +78,15 @@ namespace Microsoft.DotNet.Tests
             result.Should().BeNull();
         }
 
-        [Fact]
+        [TestMethod]
         public void ItReturnsNullWhenCommandNameDoesNotExistInProjectTools()
         {
             var projectToolsCommandResolver = SetupProjectToolsCommandResolver();
 
-            var testInstance = _testAssetsManager.CopyTestAsset(TestProjectName)
+            var testInstance = TestAssetsManager.CopyTestAsset(TestProjectName)
                 .WithSource();
 
-            NuGetConfigWriter.Write(testInstance.Path, TestContext.Current.TestPackages);
+            NuGetConfigWriter.Write(testInstance.Path, SdkTestContext.Current.TestPackages);
 
             testInstance.Restore(Log);
 
@@ -101,15 +102,15 @@ namespace Microsoft.DotNet.Tests
             result.Should().BeNull();
         }
 
-        [Fact]
+        [TestMethod]
         public void ItReturnsACommandSpecWithDOTNETAsFileNameAndCommandNameInArgsWhenCommandNameExistsInProjectTools()
         {
             var projectToolsCommandResolver = SetupProjectToolsCommandResolver();
 
-            var testInstance = _testAssetsManager.CopyTestAsset(TestProjectName)
+            var testInstance = TestAssetsManager.CopyTestAsset(TestProjectName)
                 .WithSource();
 
-            NuGetConfigWriter.Write(testInstance.Path, TestContext.Current.TestPackages);
+            NuGetConfigWriter.Write(testInstance.Path, SdkTestContext.Current.TestPackages);
 
             testInstance.Restore(Log);
 
@@ -131,15 +132,15 @@ namespace Microsoft.DotNet.Tests
             result.Args.Should().Contain(commandResolverArguments.CommandName);
         }
 
-        [Fact]
+        [TestMethod]
         public void ItEscapesCommandArgumentsWhenReturningACommandSpec()
         {
             var projectToolsCommandResolver = SetupProjectToolsCommandResolver();
 
-            var testInstance = _testAssetsManager.CopyTestAsset(TestProjectName)
+            var testInstance = TestAssetsManager.CopyTestAsset(TestProjectName)
                 .WithSource();
 
-            NuGetConfigWriter.Write(testInstance.Path, TestContext.Current.TestPackages);
+            NuGetConfigWriter.Write(testInstance.Path, SdkTestContext.Current.TestPackages);
 
             testInstance.Restore(Log);
 
@@ -156,15 +157,15 @@ namespace Microsoft.DotNet.Tests
             result.Args.Should().Contain("\"arg with space\"");
         }
 
-        [Fact]
+        [TestMethod]
         public void ItReturnsACommandSpecWithArgsContainingCommandPathWhenReturningACommandSpecAndCommandArgumentsAreNull()
         {
             var projectToolsCommandResolver = SetupProjectToolsCommandResolver();
 
-            var testInstance = _testAssetsManager.CopyTestAsset(TestProjectName)
+            var testInstance = TestAssetsManager.CopyTestAsset(TestProjectName)
                 .WithSource();
 
-            NuGetConfigWriter.Write(testInstance.Path, TestContext.Current.TestPackages);
+            NuGetConfigWriter.Write(testInstance.Path, SdkTestContext.Current.TestPackages);
 
             testInstance.Restore(Log);
 
@@ -183,15 +184,15 @@ namespace Microsoft.DotNet.Tests
             commandPath.Should().Contain("dotnet-portable.dll");
         }
 
-        [Fact]
+        [TestMethod]
         public void ItReturnsACommandSpecWithArgsContainingCommandPathWhenInvokingAToolReferencedWithADifferentCasing()
         {
             var projectToolsCommandResolver = SetupProjectToolsCommandResolver();
 
-            var testInstance = _testAssetsManager.CopyTestAsset(TestProjectName)
+            var testInstance = TestAssetsManager.CopyTestAsset(TestProjectName)
                 .WithSource();
 
-            NuGetConfigWriter.Write(testInstance.Path, TestContext.Current.TestPackages);
+            NuGetConfigWriter.Write(testInstance.Path, SdkTestContext.Current.TestPackages);
 
             testInstance.Restore(Log);
 
@@ -210,16 +211,16 @@ namespace Microsoft.DotNet.Tests
             commandPath.Should().Contain("dotnet-prefercliruntime.dll");
         }
 
-        [Fact]
+        [TestMethod]
         public void ItWritesADepsJsonFileNextToTheLockfile()
         {
             var projectToolsCommandResolver = SetupProjectToolsCommandResolver();
 
-            var testInstance = _testAssetsManager.CopyTestAsset(TestProjectName)
+            var testInstance = TestAssetsManager.CopyTestAsset(TestProjectName)
                 .WithSource()
                 .WithRepoGlobalPackages();
 
-            NuGetConfigWriter.Write(testInstance.Path, TestContext.Current.TestPackages);
+            NuGetConfigWriter.Write(testInstance.Path, SdkTestContext.Current.TestPackages);
 
             testInstance.Restore(Log);
 
@@ -230,7 +231,7 @@ namespace Microsoft.DotNet.Tests
                 ProjectDirectory = testInstance.Path
             };
 
-            var nugetPackagesRoot = TestContext.Current.TestGlobalPackagesFolder;
+            var nugetPackagesRoot = SdkTestContext.Current.TestGlobalPackagesFolder;
 
             var toolPathCalculator = new ToolPathCalculator(nugetPackagesRoot);
 
@@ -258,18 +259,18 @@ namespace Microsoft.DotNet.Tests
                 .Should().HaveFilesMatching("*.deps.json", SearchOption.TopDirectoryOnly);
         }
 
-        [Fact]
+        [TestMethod]
         public void GenerateDepsJsonMethodDoesntOverwriteWhenDepsFileAlreadyExists()
         {
-            var testInstance = _testAssetsManager.CopyTestAsset(TestProjectName)
+            var testInstance = TestAssetsManager.CopyTestAsset(TestProjectName)
                 .WithSource()
                 .WithRepoGlobalPackages();
 
-            NuGetConfigWriter.Write(testInstance.Path, TestContext.Current.TestPackages);
+            NuGetConfigWriter.Write(testInstance.Path, SdkTestContext.Current.TestPackages);
 
             testInstance.Restore(Log);
 
-            var toolPathCalculator = new ToolPathCalculator(TestContext.Current.TestGlobalPackagesFolder);
+            var toolPathCalculator = new ToolPathCalculator(SdkTestContext.Current.TestGlobalPackagesFolder);
 
             var lockFilePath = toolPathCalculator.GetLockFilePath(
                 "dotnet-portable",
@@ -294,15 +295,15 @@ namespace Microsoft.DotNet.Tests
             File.Delete(depsJsonFile);
         }
 
-        [Fact]
+        [TestMethod]
         public void ItDoesNotAddFxVersionAsAParamWhenTheToolDoesNotHaveThePrefercliruntimeFile()
         {
             var projectToolsCommandResolver = SetupProjectToolsCommandResolver();
 
-            var testInstance = _testAssetsManager.CopyTestAsset(TestProjectName)
+            var testInstance = TestAssetsManager.CopyTestAsset(TestProjectName)
                 .WithSource();
 
-            NuGetConfigWriter.Write(testInstance.Path, TestContext.Current.TestPackages);
+            NuGetConfigWriter.Write(testInstance.Path, SdkTestContext.Current.TestPackages);
 
             testInstance.Restore(Log);
 
@@ -322,16 +323,17 @@ namespace Microsoft.DotNet.Tests
 
         //  https://github.com/dotnet/sdk/issues/49665
         //  Failed to load /private/tmp/helix/working/B3F609DC/p/d/shared/Microsoft.NETCore.App/9.0.0/libhostpolicy.dylib, error: dlopen(/private/tmp/helix/working/B3F609DC/p/d/shared/Microsoft.NETCore.App/9.0.0/libhostpolicy.dylib, 0x0001): tried: '/private/tmp/helix/working/B3F609DC/p/d/shared/Microsoft.NETCore.App/9.0.0/libhostpolicy.dylib' (mach-o file, but is an incompatible architecture (have 'x86_64', need 'arm64')), '/System/Volumes/Preboot/Cryptexes/OS/private/tmp/helix/working/B3F609DC/p/d/shared/Microsoft.NETCore.App/9.0.0/libhostpolicy.dylib' (no such file), '/private/tmp/helix/working/B3F609DC/p/d/shared/Microsoft.NETCore.App/9.0.0/libhostpolicy.dylib' (mach-o file, but is an incompatible architecture (have 'x86_64', need 'arm64'))
-        [PlatformSpecificFact(TestPlatforms.Any & ~TestPlatforms.OSX)]
+        [TestMethod]
+        [OSCondition(ConditionMode.Exclude, OperatingSystems.OSX)]
         public void ItFindsToolsLocatedInTheNuGetFallbackFolder()
         {
-            var testInstance = _testAssetsManager.CopyTestAsset("AppWithFallbackFolderToolDependency")
+            var testInstance = TestAssetsManager.CopyTestAsset("AppWithFallbackFolderToolDependency")
                 .WithSource();
 
             var testProjectDirectory = testInstance.Path;
             var fallbackFolder = Path.Combine(testProjectDirectory, "fallbackFolder");
 
-            var nugetConfig = UseNuGetConfigWithFallbackFolder(testInstance, fallbackFolder, TestContext.Current.TestPackages);
+            var nugetConfig = UseNuGetConfigWithFallbackFolder(testInstance, fallbackFolder, SdkTestContext.Current.TestPackages);
 
             PopulateFallbackFolder(testProjectDirectory, fallbackFolder);
 
@@ -348,16 +350,17 @@ namespace Microsoft.DotNet.Tests
 
         //  https://github.com/dotnet/sdk/issues/49665
         //  Failed to load /private/tmp/helix/working/B3F609DC/p/d/shared/Microsoft.NETCore.App/9.0.0/libhostpolicy.dylib, error: dlopen(/private/tmp/helix/working/B3F609DC/p/d/shared/Microsoft.NETCore.App/9.0.0/libhostpolicy.dylib, 0x0001): tried: '/private/tmp/helix/working/B3F609DC/p/d/shared/Microsoft.NETCore.App/9.0.0/libhostpolicy.dylib' (mach-o file, but is an incompatible architecture (have 'x86_64', need 'arm64')), '/System/Volumes/Preboot/Cryptexes/OS/private/tmp/helix/working/B3F609DC/p/d/shared/Microsoft.NETCore.App/9.0.0/libhostpolicy.dylib' (no such file), '/private/tmp/helix/working/B3F609DC/p/d/shared/Microsoft.NETCore.App/9.0.0/libhostpolicy.dylib' (mach-o file, but is an incompatible architecture (have 'x86_64', need 'arm64'))
-        [PlatformSpecificFact(TestPlatforms.Any & ~TestPlatforms.OSX)]
+        [TestMethod]
+        [OSCondition(ConditionMode.Exclude, OperatingSystems.OSX)]
         public void ItShowsAnErrorWhenTheToolDllIsNotFound()
         {
-            var testInstance = _testAssetsManager.CopyTestAsset("AppWithFallbackFolderToolDependency")
+            var testInstance = TestAssetsManager.CopyTestAsset("AppWithFallbackFolderToolDependency")
                 .WithSource();
             var testProjectDirectory = testInstance.Path;
             var fallbackFolder = Path.Combine(testProjectDirectory, "fallbackFolder");
             var nugetPackages = Path.Combine(testProjectDirectory, "nugetPackages");
 
-            var nugetConfig = UseNuGetConfigWithFallbackFolder(testInstance, fallbackFolder, TestContext.Current.TestPackages);
+            var nugetConfig = UseNuGetConfigWithFallbackFolder(testInstance, fallbackFolder, SdkTestContext.Current.TestPackages);
 
             PopulateFallbackFolder(testProjectDirectory, fallbackFolder);
 
@@ -429,7 +432,7 @@ namespace Microsoft.DotNet.Tests
         {
             //  When using the product, the ToolDepsJsonGeneratorProject property is used to get this path, but for testing
             //  we'll hard code the path inside the SDK since we don't have a project to evaluate here
-            return Path.Combine(TestContext.Current.ToolsetUnderTest.SdksPath, "Microsoft.NET.Sdk", "targets", "GenerateDeps", "GenerateDeps.proj");
+            return Path.Combine(SdkTestContext.Current.ToolsetUnderTest.SdksPath, "Microsoft.NET.Sdk", "targets", "GenerateDeps", "GenerateDeps.proj");
         }
     }
 }

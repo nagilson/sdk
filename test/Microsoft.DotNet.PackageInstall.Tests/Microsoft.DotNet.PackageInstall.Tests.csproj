@@ -1,23 +1,19 @@
-﻿<Project>
+﻿<Project Sdk="MSTest.Sdk">
 
   <PropertyGroup>
     <OutDirName>Tests\$(MSBuildProjectName)</OutDirName>
   </PropertyGroup>
 
-  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
-
   <PropertyGroup>
-    <TargetFramework>$(ToolsetTargetFramework)</TargetFramework>
-    <OutputType>Exe</OutputType>
+    <TargetFramework>$(SdkTargetFramework)</TargetFramework>
     <StrongNameKeyId>MicrosoftAspNetCore</StrongNameKeyId>
-    <CanRunTestAsTool>false</CanRunTestAsTool>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Cli\dotnet\dotnet.csproj" />
     <ProjectReference Include="..\..\src\Cli\Microsoft.DotNet.Configurer\Microsoft.DotNet.Configurer.csproj" />
     <ProjectReference Include="..\..\src\Cli\Microsoft.DotNet.InternalAbstractions\Microsoft.DotNet.InternalAbstractions.csproj" />
-    <ProjectReference Include="..\Microsoft.NET.TestFramework\Microsoft.NET.TestFramework.csproj" />
+    <ProjectReference Include="..\Microsoft.NET.TestFramework.MSTest\Microsoft.NET.TestFramework.MSTest.csproj" />
     <ProjectReference Include="..\Microsoft.DotNet.Tools.Tests.ComponentMocks\Microsoft.DotNet.Tools.Tests.ComponentMocks.csproj" />
   </ItemGroup>
 
@@ -169,13 +165,12 @@
                             CreateNupkgWithPreviewFromSource">
     <ItemGroup>
       <TestAssetFiles Include="$(BaseOutputPath)\TestAsset\**\*.*" />
-      <TestAssetLocalNugetFeed Include="$(BaseOutputPath)\$(Configuration)\TestAssetLocalNugetFeed\**\*.*" />
+      <TestAssetLocalNugetFeed Include="$(BaseOutputPath)\$(Configuration)\$(TargetFramework)\TestAssetLocalNugetFeed\**\*.*" />
     </ItemGroup>
 
     <Copy SourceFiles="@(TestAssetFiles)" DestinationFiles="@(TestAssetFiles->'$(PublishDir)\TestAsset\%(RecursiveDir)%(Filename)%(Extension)')" />
     <Copy SourceFiles="@(TestAssetLocalNugetFeed)" DestinationFiles="@(TestAssetLocalNugetFeed->'$(PublishDir)\TestAssetLocalNugetFeed\%(RecursiveDir)%(Filename)%(Extension)')" />
   </Target>
 
-  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
 
 </Project>

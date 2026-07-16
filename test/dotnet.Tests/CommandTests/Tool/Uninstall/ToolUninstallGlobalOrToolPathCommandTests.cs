@@ -18,6 +18,7 @@ using Parser = Microsoft.DotNet.Cli.Parser;
 
 namespace Microsoft.DotNet.Tests.Commands.Tool
 {
+    [TestClass]
     public class ToolUninstallGlobalOrToolPathCommandTests
     {
         private readonly BufferedReporter _reporter;
@@ -39,7 +40,7 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
             _environmentPathInstructionMock = new EnvironmentPathInstructionMock(_reporter, _shimsDirectory);
         }
 
-        [Fact]
+        [TestMethod]
         public void GivenANonExistentPackageItErrors()
         {
             var packageId = "does.not.exist";
@@ -54,7 +55,7 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
                 .Be(string.Format(CliCommandStrings.ToolUninstallToolNotInstalled, packageId));
         }
 
-        [Fact]
+        [TestMethod]
         public void GivenAPackageItUninstalls()
         {
             CreateInstallCommand($"-g {PackageId} --verbosity minimal").Execute().Should().Be(0);
@@ -96,7 +97,7 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
             _fileSystem.File.Exists(shimPath).Should().BeFalse();
         }
 
-        [Fact]
+        [TestMethod]
         public void GivenAPackageWhenCallFromUninstallRedirectCommandItUninstalls()
         {
             CreateInstallCommand($"-g {PackageId}  --verbosity minimal").Execute().Should().Be(0);
@@ -166,7 +167,7 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
             _fileSystem.File.Exists(shimPath).Should().BeFalse();
         }
 
-        [Fact]
+        [TestMethod]
         public void GivenAFailureToUninstallItLeavesItInstalled()
         {
             CreateInstallCommand($"-g {PackageId} --verbosity minimal").Execute().Should().Be(0);
@@ -209,7 +210,7 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
             _fileSystem.File.Exists(shimPath).Should().BeTrue();
         }
 
-        [Fact]
+        [TestMethod]
         public void GivenAnInvalidToolPathItThrowsException()
         {
             var toolPath = "tool-path-does-not-exist";
@@ -235,14 +236,13 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
             var toolPackageUninstallerMock = new ToolPackageUninstallerMock(_fileSystem, store);
 
             var toolPackageDownloaderMock = new ToolPackageDownloaderMock2(store,
-                runtimeJsonPathForTests: TestContext.GetRuntimeGraphFilePath(),
+                runtimeJsonPathForTests: SdkTestContext.GetRuntimeGraphFilePath(),
                 currentWorkingDirectory: null,
                 fileSystem: _fileSystem);
 
 
             return new ToolInstallGlobalOrToolPathCommand(
                 result,
-                new PackageId(PackageId),
                 (location, forwardArguments, currentWorkingDirectory) => (store, store, toolPackageDownloaderMock, toolPackageUninstallerMock),
                 (_, _) => new ShellShimRepository(
                     new DirectoryPath(_shimsDirectory),

@@ -7,14 +7,13 @@ namespace System.CommandLine.StaticCompletions.Tests;
 
 using System.CommandLine.Help;
 using System.CommandLine.StaticCompletions.Shells;
-using Xunit;
-using Xunit.Abstractions;
 
-public class ZshShellProviderTests(ITestOutputHelper log)
+[TestClass]
+public class ZshShellProviderTests : VerifyMSTest.VerifyBase
 {
     private IShellProvider _provider = new ZshShellProvider();
 
-    [Fact]
+    [TestMethod]
     public async Task GenericCompletions()
     {
         Command command = new Command("my-app") {
@@ -36,15 +35,21 @@ public class ZshShellProviderTests(ITestOutputHelper log)
                 new Command("test")
             }
         };
-        await _provider.Verify(command, log);
+        await _provider.Verify(command, TestContext);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task DynamicCompletionsGeneration()
     {
-        var staticOption = new DynamicOption<int>("--static");
+        var staticOption = new Option<int>("--static")
+        {
+            IsDynamic = true
+        };
         staticOption.AcceptOnlyFromAmong("1", "2", "3");
-        var dynamicArg = new DynamicArgument<int>("--dynamic");
+        var dynamicArg = new Argument<int>("--dynamic")
+        {
+            IsDynamic = true
+        };
         dynamicArg.CompletionSources.Add((context) =>
         {
             return [
@@ -58,10 +63,10 @@ public class ZshShellProviderTests(ITestOutputHelper log)
             staticOption,
             dynamicArg
         };
-        await _provider.Verify(command, log);
+        await _provider.Verify(command, TestContext);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task CustomStaticCompletionsGeneration()
     {
         var staticOption = new Option<int>("--static");
@@ -80,6 +85,6 @@ public class ZshShellProviderTests(ITestOutputHelper log)
             staticOption,
             dynamicArg
         };
-        await _provider.Verify(command, log);
+        await _provider.Verify(command, TestContext);
     }
 }

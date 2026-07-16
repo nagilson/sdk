@@ -7,10 +7,11 @@ using Microsoft.NET.Sdk.WorkloadManifestReader;
 
 namespace Microsoft.DotNet.Cli.Workload.Install.Tests
 {
+    [TestClass]
     public class WorkloadSetVersionMappingTests : SdkTest
     {
 
-        public WorkloadSetVersionMappingTests(ITestOutputHelper log) : base(log)
+        public WorkloadSetVersionMappingTests()
         {
         }
 
@@ -40,21 +41,21 @@ namespace Microsoft.DotNet.Cli.Workload.Install.Tests
             }
         }
 
-        [Theory]
-        [MemberData(nameof(WorkloadVersionsData))]
+        [TestMethod]
+        [DynamicData(nameof(WorkloadVersionsData))]
         public void TestWorkloadSetVersionParsing(string workloadSetVersion, string expectedFeatureBand, string expectedPackageVersion)
         {
-            string packageVersion = WorkloadSetVersion.ToWorkloadSetPackageVersion(workloadSetVersion, out SdkFeatureBand featureBand);
+            var featureBand = SdkFeatureBand.FromWorkloadSetVersion(workloadSetVersion, out var packageVersion);
 
             packageVersion.Should().Be(expectedPackageVersion);
             featureBand.Should().Be(new SdkFeatureBand(expectedFeatureBand));
         }
 
-        [Theory]
-        [MemberData(nameof(WorkloadVersionsData))]
+        [TestMethod]
+        [DynamicData(nameof(WorkloadVersionsData))]
         public void TestWorkloadSetPackageVersionParsing(string expectedWorkloadSetVersion, string packageFeatureBand, string packageVersion)
         {
-            string workloadSetVersion = WorkloadSetVersion.FromWorkloadSetPackageVersion(new SdkFeatureBand(packageFeatureBand), packageVersion);
+            string workloadSetVersion = new SdkFeatureBand(packageFeatureBand).GetWorkloadSetPackageVersion(packageVersion);
 
             workloadSetVersion.Should().Be(expectedWorkloadSetVersion);
         }

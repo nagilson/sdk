@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Microsoft.DotNet.Cli.Commands.New;
@@ -6,12 +6,15 @@ using Microsoft.TemplateEngine.Abstractions.Components;
 
 namespace Microsoft.DotNet.Cli.New.Tests
 {
+    [TestClass]
     public class SdkInfoProviderTests
     {
-        [Fact]
+        public TestContext TestContext { get; set; } = null!;
+
+        [TestMethod]
         public async Task GetInstalledVersionsAsync_ShouldContainCurrentVersion()
         {
-            string? dotnetRootUnderTest = TestContext.Current.ToolsetUnderTest?.DotNetRoot;
+            string? dotnetRootUnderTest = SdkTestContext.Current.ToolsetUnderTest?.DotNetRoot;
             string? pathOrig = Environment.GetEnvironmentVariable("PATH");
             Environment.SetEnvironmentVariable("PATH", dotnetRootUnderTest + Path.PathSeparator + pathOrig);
 
@@ -20,8 +23,8 @@ namespace Microsoft.DotNet.Cli.New.Tests
                 // make sure current process path is not picked up as the dontet executable location
                 ISdkInfoProvider sp = new SdkInfoProvider(() => string.Empty);
 
-                string currentVersion = await sp.GetCurrentVersionAsync(default);
-                IEnumerable<string> allVersions = await sp.GetInstalledVersionsAsync(default);
+                string currentVersion = await sp.GetCurrentVersionAsync(TestContext.CancellationToken);
+                IEnumerable<string> allVersions = await sp.GetInstalledVersionsAsync(TestContext.CancellationToken);
 
                 currentVersion.Should().NotBeNullOrEmpty("Current Sdk version should be populated");
                 allVersions.ToList().Should().NotBeNull();

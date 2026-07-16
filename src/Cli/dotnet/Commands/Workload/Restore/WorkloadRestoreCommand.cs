@@ -6,7 +6,6 @@
 using System.CommandLine;
 using Microsoft.Build.Execution;
 using Microsoft.Build.Logging;
-using Microsoft.DotNet.Cli.Commands.Restore;
 using Microsoft.DotNet.Cli.Commands.Workload.Install;
 using Microsoft.DotNet.Cli.Commands.Workload.Update;
 using Microsoft.DotNet.Cli.Extensions;
@@ -15,13 +14,17 @@ using Microsoft.NET.Sdk.WorkloadManifestReader;
 
 namespace Microsoft.DotNet.Cli.Commands.Workload.Restore;
 
-internal class WorkloadRestoreCommand(
-    ParseResult result,
-    IReporter reporter = null) : WorkloadCommandBase(result, reporter: reporter)
+internal sealed class WorkloadRestoreCommand : WorkloadCommandBase<WorkloadRestoreCommandDefinition>
 {
-    private readonly ParseResult _result = result;
-    private readonly IEnumerable<string> _slnOrProjectArgument =
-            result.GetValue(WorkloadRestoreCommandParser.SlnOrProjectArgument);
+    private readonly ParseResult _result;
+    private readonly IEnumerable<string> _slnOrProjectArgument;
+
+    public WorkloadRestoreCommand(ParseResult result, IReporter reporter = null)
+        : base(result, reporter: reporter)
+    {
+        _result = result;
+        _slnOrProjectArgument = result.GetValue(Definition.SlnOrProjectArgument);
+    }
 
     public override int Execute()
     {
@@ -60,14 +63,15 @@ internal class WorkloadRestoreCommand(
         });
 
         workloadInstaller.Shutdown();
-        
+
         return 0;
     }
 
-    private static readonly string GetRequiredWorkloadsTargetName = "_GetRequiredWorkloads";
-
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("AOT", "IL2026", Justification = "Temporary unblock for dotnet/msbuild#14064 (MSBuild build APIs are now [RequiresUnreferencedCode]). dotnet CLI runs MSBuild in-proc (not trimmed). Remove when dotnet/sdk#55225 is fixed.")]
     private List<WorkloadId> RunTargetToGetWorkloadIds(IEnumerable<string> allProjects)
     {
+        const string GetRequiredWorkloadsTargetName = "_GetRequiredWorkloads";
+
         var globalProperties = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             {"SkipResolvePackageAssets", "true"}

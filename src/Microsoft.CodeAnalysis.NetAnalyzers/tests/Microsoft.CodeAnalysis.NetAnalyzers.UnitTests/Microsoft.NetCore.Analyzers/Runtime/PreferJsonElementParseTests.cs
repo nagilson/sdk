@@ -1,17 +1,18 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the MIT license.  See License.txt in the project root for license information.
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis.Testing;
-using Xunit;
 using VerifyCS = Test.Utilities.CSharpCodeFixVerifier<
     Microsoft.NetCore.Analyzers.Runtime.PreferJsonElementParse,
     Microsoft.NetCore.Analyzers.Runtime.PreferJsonElementParseFixer>;
 
 namespace Microsoft.NetCore.Analyzers.Runtime.UnitTests
 {
+    [TestClass]
     public class PreferJsonElementParseTests
     {
-        [Fact]
+        [TestMethod]
         public async Task NoDiagnostic_WhenJsonElementParseNotAvailable()
         {
             var source = """
@@ -40,7 +41,7 @@ namespace Microsoft.NetCore.Analyzers.Runtime.UnitTests
             await VerifyCS.VerifyAnalyzerAsync(source);
         }
 
-        [Fact]
+        [TestMethod]
         public async Task Diagnostic_WhenUsingJsonDocumentParseRootElement()
         {
             var source = """
@@ -98,7 +99,7 @@ namespace Microsoft.NetCore.Analyzers.Runtime.UnitTests
             await VerifyCS.VerifyCodeFixAsync(source, fixedSource);
         }
 
-        [Fact]
+        [TestMethod]
         public async Task Diagnostic_WhenUsingJsonDocumentParseRootElement_WithMultipleArguments()
         {
             var source = """
@@ -160,7 +161,7 @@ namespace Microsoft.NetCore.Analyzers.Runtime.UnitTests
             await VerifyCS.VerifyCodeFixAsync(source, fixedSource);
         }
 
-        [Fact]
+        [TestMethod]
         public async Task NoDiagnostic_WhenJsonDocumentProperlyDisposed_UsingStatement()
         {
             var source = """
@@ -195,7 +196,7 @@ namespace Microsoft.NetCore.Analyzers.Runtime.UnitTests
             await VerifyCS.VerifyAnalyzerAsync(source);
         }
 
-        [Fact]
+        [TestMethod]
         public async Task NoDiagnostic_WhenJsonDocumentProperlyDisposed_UsingDeclaration()
         {
             var source = """
@@ -229,10 +230,10 @@ namespace Microsoft.NetCore.Analyzers.Runtime.UnitTests
             {
                 TestCode = source,
                 LanguageVersion = CodeAnalysis.CSharp.LanguageVersion.CSharp8
-            }.RunAsync();
+            }.RunAsync(CancellationToken.None);
         }
 
-        [Fact]
+        [TestMethod]
         public async Task Diagnostic_InlineAccess_DirectAssignment()
         {
             var source = """
@@ -290,7 +291,7 @@ namespace Microsoft.NetCore.Analyzers.Runtime.UnitTests
             await VerifyCS.VerifyCodeFixAsync(source, fixedSource);
         }
 
-        [Fact]
+        [TestMethod]
         public async Task Diagnostic_ReturnStatement()
         {
             var source = """
@@ -348,7 +349,7 @@ namespace Microsoft.NetCore.Analyzers.Runtime.UnitTests
             await VerifyCS.VerifyCodeFixAsync(source, fixedSource);
         }
 
-        [Fact]
+        [TestMethod]
         public async Task Diagnostic_ExpressionBodiedMember()
         {
             var source = """
@@ -400,7 +401,7 @@ namespace Microsoft.NetCore.Analyzers.Runtime.UnitTests
             await VerifyCS.VerifyCodeFixAsync(source, fixedSource);
         }
 
-        [Fact]
+        [TestMethod]
         public async Task NoDiagnostic_WhenJsonElementParseHasNoMatchingOverload()
         {
             var source = """
@@ -436,7 +437,7 @@ namespace Microsoft.NetCore.Analyzers.Runtime.UnitTests
             await VerifyCS.VerifyAnalyzerAsync(source);
         }
 
-        [Fact]
+        [TestMethod]
         public async Task Diagnostic_WhenChainedWithOtherOperations()
         {
             var source = """
@@ -502,7 +503,7 @@ namespace Microsoft.NetCore.Analyzers.Runtime.UnitTests
             await VerifyCS.VerifyCodeFixAsync(source, fixedSource);
         }
 
-        [Fact]
+        [TestMethod]
         public async Task NoDiagnostic_WhenRootElementAccessedViaVariable()
         {
             var source = """
@@ -536,7 +537,7 @@ namespace Microsoft.NetCore.Analyzers.Runtime.UnitTests
             await VerifyCS.VerifyAnalyzerAsync(source);
         }
 
-        [Fact]
+        [TestMethod]
         public async Task Diagnostic_MultipleParametersWithMatchingOverload()
         {
             var source = """
@@ -598,7 +599,7 @@ namespace Microsoft.NetCore.Analyzers.Runtime.UnitTests
             await VerifyCS.VerifyCodeFixAsync(source, fixedSource);
         }
 
-        [Fact]
+        [TestMethod]
         public async Task Diagnostic_InLambdaExpression()
         {
             var source = """

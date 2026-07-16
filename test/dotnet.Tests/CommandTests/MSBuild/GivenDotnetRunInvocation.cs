@@ -6,31 +6,27 @@ using Microsoft.DotNet.Cli.Utils;
 
 namespace Microsoft.DotNet.Cli.MSBuild.Tests
 {
-    [Collection(TestConstants.UsesStaticTelemetryState)]
-    public class GivenDotnetRunInvocation : IClassFixture<NullCurrentSessionIdFixture>
+    [TestClass]
+    public class GivenDotnetRunInvocation : SdkTest
     {
-        private static readonly string[] ConstantRestoreArgs = ["-nologo", "--verbosity:quiet"];
+        [ClassInitialize]
+        public static void ClassInit(TestContext context) => TelemetryClient.DisabledForTests = true;
+
+        private static readonly string[] ConstantRestoreArgs = ["--nologo", "--verbosity:quiet"];
         private static readonly string NuGetDisabledProperty = "--property:NuGetInteractive=false";
 
-        public ITestOutputHelper Log { get; }
-
-        public GivenDotnetRunInvocation(ITestOutputHelper log)
-        {
-            Log = log;
-        }
-
-        [Theory]
-        [InlineData(new string[] { "-p:prop1=true" }, new string[] { "--property:prop1=true" })]
-        [InlineData(new string[] { "--property:prop1=true" }, new string[] { "--property:prop1=true" })]
-        [InlineData(new string[] { "--property", "prop1=true" }, new string[] { "--property:prop1=true" })]
-        [InlineData(new string[] { "-p", "prop1=true" }, new string[] { "--property:prop1=true" })]
-        [InlineData(new string[] { "-p", "prop1=true", "-p", "prop2=false" }, new string[] { "--property:prop1=true", "--property:prop2=false" })]
-        [InlineData(new string[] { "-p:prop1=true;prop2=false" }, new string[] { "--property:prop1=true", "--property:prop2=false" })]
-        [InlineData(new string[] { "-p", "HelloWorld.csproj", "-p:prop1=true" }, new string[] { "--property:prop1=true" })]
-        [InlineData(new string[] { "--disable-build-servers" }, new string[] { "--property:UseRazorBuildServer=false", "--property:UseSharedCompilation=false", "/nodeReuse:false" })]
+        [TestMethod]
+        [DataRow(new string[] { "-p:prop1=true" }, new string[] { "--property:prop1=true" })]
+        [DataRow(new string[] { "--property:prop1=true" }, new string[] { "--property:prop1=true" })]
+        [DataRow(new string[] { "--property", "prop1=true" }, new string[] { "--property:prop1=true" })]
+        [DataRow(new string[] { "-p", "prop1=true" }, new string[] { "--property:prop1=true" })]
+        [DataRow(new string[] { "-p", "prop1=true", "-p", "prop2=false" }, new string[] { "--property:prop1=true", "--property:prop2=false" })]
+        [DataRow(new string[] { "-p:prop1=true;prop2=false" }, new string[] { "--property:prop1=true", "--property:prop2=false" })]
+        [DataRow(new string[] { "-p", "HelloWorld.csproj", "-p:prop1=true" }, new string[] { "--property:prop1=true" })]
+        [DataRow(new string[] { "--disable-build-servers" }, new string[] { "--property:UseRazorBuildServer=false", "--property:UseSharedCompilation=false", "/nodeReuse:false" })]
         public void MsbuildInvocationIsCorrect(string[] args, string[] expectedArgs)
         {
-            var tam = new TestAssetsManager(Log);
+            var tam = TestAssetsManager;
             var oldWorkingDirectory = Directory.GetCurrentDirectory();
             var newWorkingDir = tam.CopyTestAsset("HelloWorld", identifier: $"{nameof(MsbuildInvocationIsCorrect)}_{args.GetHashCode()}_{expectedArgs.GetHashCode()}").WithSource().Path;
 
@@ -43,7 +39,20 @@ namespace Microsoft.DotNet.Cli.MSBuild.Tests
                     var command = RunCommand.FromArgs(args);
                     command.MSBuildArgs
                         .Should()
-                        .BeEquivalentTo(MSBuildArgs.AnalyzeMSBuildArguments([.. ConstantRestoreArgs, .. expectedArgs, NuGetDisabledProperty ], CommonOptions.PropertiesOption, CommonOptions.RestorePropertiesOption, CommonOptions.MSBuildTargetOption(), RunCommandParser.VerbosityOption));
+                        .BeEquivalentTo(MSBuildArgs.AnalyzeMSBuildArguments(
+                        [
+                           .. ConstantRestoreArgs,
+                           .. expectedArgs,
+                           NuGetDisabledProperty
+                        ],
+                        options:
+                        [
+                            CommonOptions.CreatePropertyOption(),
+                            CommonOptions.CreateRestorePropertyOption(),
+                            CommonOptions.CreateMSBuildTargetOption(),
+                            CommonOptions.CreateVerbosityOption(),
+                            CommonOptions.CreateNoLogoOption()
+                        ]));
                 });
             }
             finally
@@ -53,3 +62,4 @@ namespace Microsoft.DotNet.Cli.MSBuild.Tests
         }
     }
 }
+

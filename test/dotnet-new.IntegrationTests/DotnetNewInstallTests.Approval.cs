@@ -5,9 +5,10 @@ using Microsoft.DotNet.Cli.Utils;
 
 namespace Microsoft.DotNet.Cli.New.IntegrationTests
 {
+    [TestClass]
     public partial class DotnetNewInstallTests : BaseIntegrationTest
     {
-        [Fact]
+        [TestMethod]
         public Task CannotInstallPackageAvailableFromBuiltIns()
         {
             CommandResult commandResult = new DotnetNewCommand(_log, "install", "Microsoft.DotNet.Common.ItemTemplates@6.0.100")
@@ -22,11 +23,11 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
             return Verify(commandResult.StdErr)
                 .AddScrubber(output =>
                 {
-                    output.ScrubByRegex("   Microsoft\\.DotNet\\.Common\\.ItemTemplates::[A-Za-z0-9.-]+", "   Microsoft.DotNet.Common.ItemTemplates::%VERSION%");
+                    output.ScrubByRegex("   Microsoft\\.DotNet\\.Common\\.ItemTemplates@[A-Za-z0-9.-]+", "   Microsoft.DotNet.Common.ItemTemplates@%VERSION%");
                 });
         }
 
-        [Fact]
+        [TestMethod]
         public Task CanInstallPackageAvailableFromBuiltInsWithForce()
         {
             CommandResult commandResult = new DotnetNewCommand(_log, "install", "Microsoft.DotNet.Common.ItemTemplates@6.0.100", "--force")
@@ -41,11 +42,12 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
             return Verify(commandResult.StdOut)
                 .AddScrubber(output =>
                 {
-                    output.ScrubByRegex("   Microsoft.DotNet.Common.ItemTemplates::[A-Za-z0-9.-]+", "   Microsoft.DotNet.Common.ItemTemplates::%VERSION%");
+                    output.ScrubByRegex("   Microsoft\\.DotNet\\.Common\\.ItemTemplates::[A-Za-z0-9.-]+", "   Microsoft.DotNet.Common.ItemTemplates::%VERSION%");
+                    output.ScrubByRegex("   Microsoft\\.DotNet\\.Common\\.ItemTemplates@[A-Za-z0-9.-]+", "   Microsoft.DotNet.Common.ItemTemplates@%VERSION%");
                 });
         }
 
-        [Fact]
+        [TestMethod]
         public Task CannotInstallMultiplePackageAvailableFromBuiltIns()
         {
             CommandResult commandResult = new DotnetNewCommand(_log, "install", "Microsoft.DotNet.Common.ItemTemplates@6.0.100", "Microsoft.DotNet.Web.ItemTemplates@5.0.0")
@@ -60,13 +62,13 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
             return Verify(commandResult.StdErr)
                 .AddScrubber(output =>
                 {
-                    output.ScrubByRegex("   Microsoft\\.DotNet\\.Common\\.ItemTemplates::[A-Za-z0-9.-]+", "   Microsoft.DotNet.Common.ItemTemplates@%VERSION%");
+                    output.ScrubByRegex("   Microsoft\\.DotNet\\.Common\\.ItemTemplates@[A-Za-z0-9.-]+", "   Microsoft.DotNet.Common.ItemTemplates@%VERSION%");
                 });
         }
 
-        [Theory]
-        [InlineData("-i")]
-        [InlineData("--install")]
+        [TestMethod]
+        [DataRow("-i")]
+        [DataRow("--install")]
         public Task CanShowDeprecationMessage_WhenLegacyCommandIsUsed(string commandName)
         {
             CommandResult commandResult = new DotnetNewCommand(_log, commandName, "Microsoft.DotNet.Web.ItemTemplates@5.0.0")
@@ -83,7 +85,7 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
                 .DisableRequireUniquePrefix();
         }
 
-        [Fact]
+        [TestMethod]
         public Task DoNotShowDeprecationMessage_WhenNewCommandIsUsed()
         {
             CommandResult commandResult = new DotnetNewCommand(_log, "install", "Microsoft.DotNet.Web.ItemTemplates@5.0.0")
@@ -98,7 +100,7 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
             return Verify(commandResult.StdOut);
         }
 
-        [Fact]
+        [TestMethod]
         public Task CanShowWarning_WhenConstraintTemplateIsInstalled()
         {
             string testTemplateLocation = GetTestTemplateLocation("Constraints/RestrictedTemplate");
@@ -119,7 +121,7 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
                 });
         }
 
-        [Fact]
+        [TestMethod]
         public Task CanInstallSameSourceTwice_Folder_WhenSourceIsSpecified()
         {
             string home = CreateTemporaryFolder(folderName: "Home");
@@ -141,7 +143,7 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
                 .AddScrubber(output => output.ScrubAndReplace(basicFSharp, "%TEMPLATE FOLDER%"));
         }
 
-        [Fact]
+        [TestMethod]
         public Task CanInstallSameSourceTwice_RemoteNuGet_WhenSourceIsSpecified()
         {
             string home = CreateTemporaryFolder(folderName: "Home");
@@ -162,7 +164,7 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
             return Verify(commandResult.StdOut);
         }
 
-        [Fact]
+        [TestMethod]
         public Task CannotInstallSameSourceTwice_NuGet()
         {
             string home = CreateTemporaryFolder(folderName: "Home");
@@ -187,7 +189,7 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
             return Verify(commandResult.StdErr);
         }
 
-        [Fact]
+        [TestMethod]
         public Task CannotInstallSameSourceTwice_Folder()
         {
             string home = CreateTemporaryFolder(folderName: "Home");
@@ -219,7 +221,7 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
                 .AddScrubber(output => output.ScrubAndReplace(basicFSharp, "%TEMPLATE FOLDER%"));
         }
 
-        [Fact]
+        [TestMethod]
         public Task CanShowMessageInCaseShortNameConflict()
         {
             string customHivePath = CreateTemporaryFolder(folderName: "Home");
@@ -238,7 +240,7 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
                 .AddScrubber(output => output.ScrubAndReplace(templateToInstall, "%TEMPLATE FOLDER%"));
         }
 
-        [Fact]
+        [TestMethod]
         public Task CanShowError_WhenGlobalSettingsFileIsCorrupted()
         {
             string homeDirectory = CreateTemporaryFolder();

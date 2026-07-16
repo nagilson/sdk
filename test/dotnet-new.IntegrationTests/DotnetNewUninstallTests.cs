@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.RegularExpressions;
@@ -9,17 +9,16 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
 {
     public partial class DotnetNewUninstallTests : BaseIntegrationTest
     {
-        private readonly ITestOutputHelper _log;
+        private ITestOutputHelper _log => Log;
 
-        public DotnetNewUninstallTests(ITestOutputHelper log) : base(log)
+        public DotnetNewUninstallTests()
         {
-            _log = log;
         }
 
-        [Theory]
-        [InlineData("-u")]
-        [InlineData("--uninstall")]
-        [InlineData("uninstall")]
+        [TestMethod]
+        [DataRow("-u")]
+        [DataRow("--uninstall")]
+        [DataRow("uninstall")]
         public void CanListInstalledSources_Folder(string commandName)
         {
             string home = CreateTemporaryFolder(folderName: "Home");
@@ -38,14 +37,14 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
                 .And.HaveStdOutContaining($"         dotnet new uninstall {testTemplate}");
         }
 
-        [Theory]
-        [InlineData("-u")]
-        [InlineData("--uninstall")]
-        [InlineData("uninstall")]
+        [TestMethod]
+        [DataRow("-u")]
+        [DataRow("--uninstall")]
+        [DataRow("uninstall")]
         public void CanListInstalledSources_NuGet(string commandName)
         {
             string home = CreateTemporaryFolder(folderName: "Home");
-            new DotnetNewCommand(_log, "-i", "Microsoft.DotNet.Web.ProjectTemplates.5.0::5.0.0")
+            new DotnetNewCommand(_log, "-i", "Microsoft.DotNet.Web.ProjectTemplates.5.0@5.0.0")
                 .WithCustomHive(home)
                 .WithWorkingDirectory(CreateTemporaryFolder())
                 .Execute()
@@ -72,9 +71,9 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
                 .And.HaveStdOutContaining("         dotnet new uninstall Microsoft.DotNet.Web.ProjectTemplates.5.0");
         }
 
-        [Theory]
-        [InlineData("-u")]
-        [InlineData("uninstall")]
+        [TestMethod]
+        [DataRow("-u")]
+        [DataRow("uninstall")]
         public void CanListInstalledSources_WhenNothingIsInstalled(string commandName)
         {
             string home = CreateTemporaryFolder(folderName: "Home");
@@ -89,10 +88,10 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
                 .And.HaveStdOutContaining($"Currently installed items:{Environment.NewLine}(No Items)");
         }
 
-        [Theory]
-        [InlineData("-u")]
-        [InlineData("uninstall")]
-        [InlineData("--uninstall")]
+        [TestMethod]
+        [DataRow("-u")]
+        [DataRow("uninstall")]
+        [DataRow("--uninstall")]
         public void CanUninstall_Folder(string commandName)
         {
             string home = CreateTemporaryFolder(folderName: "Home");
@@ -130,17 +129,17 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
                 .NotHaveStdErr()
                 .And.HaveStdOutContaining($"Currently installed items:{Environment.NewLine}(No Items)");
 
-            Assert.True(Directory.Exists(templateLocation));
+            Assert.IsTrue(Directory.Exists(templateLocation));
         }
 
-        [Theory]
-        [InlineData("-u")]
-        [InlineData("uninstall")]
-        [InlineData("--uninstall")]
+        [TestMethod]
+        [DataRow("-u")]
+        [DataRow("uninstall")]
+        [DataRow("--uninstall")]
         public void CanUninstall_NuGet(string commandName)
         {
             string home = CreateTemporaryFolder(folderName: "Home");
-            new DotnetNewCommand(_log, "-i", "Microsoft.DotNet.Web.ProjectTemplates.5.0::5.0.0")
+            new DotnetNewCommand(_log, "-i", "Microsoft.DotNet.Web.ProjectTemplates.5.0@5.0.0")
                 .WithCustomHive(home)
                 .WithWorkingDirectory(CreateTemporaryFolder())
                 .Execute()
@@ -165,7 +164,7 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
                 .And.HaveStdOutContaining("Author: Microsoft")
                 .And.HaveStdOutContaining("dotnet new uninstall Microsoft.DotNet.Web.ProjectTemplates.5.0");
 
-            Assert.True(File.Exists(Path.Combine(home, "packages", "Microsoft.DotNet.Web.ProjectTemplates.5.0.5.0.0.nupkg")));
+            Assert.IsTrue(File.Exists(Path.Combine(home, "packages", "Microsoft.DotNet.Web.ProjectTemplates.5.0.5.0.0.nupkg")));
 
             // This tests proper uninstallation of package even if there is a clash with existing folder name
             //  (this used to fail - see #4613)
@@ -181,7 +180,7 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
                 .ExitWith(0)
                 .And
                 .NotHaveStdErr()
-                .And.HaveStdOutContaining($"Success: Microsoft.DotNet.Web.ProjectTemplates.5.0::5.0.0 was uninstalled.");
+                .And.HaveStdOutContaining($"Success: Microsoft.DotNet.Web.ProjectTemplates.5.0@5.0.0 was uninstalled.");
 
             new DotnetNewCommand(_log, commandName)
                 .WithCustomHive(home)
@@ -193,10 +192,10 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
                 .NotHaveStdErr()
                 .And.HaveStdOutContaining($"Currently installed items:{Environment.NewLine}(No Items)");
 
-            Assert.False(File.Exists(Path.Combine(home, "packages", "Microsoft.DotNet.Web.ProjectTemplates.5.0.5.0.0.nupkg")));
+            Assert.IsFalse(File.Exists(Path.Combine(home, "packages", "Microsoft.DotNet.Web.ProjectTemplates.5.0.5.0.0.nupkg")));
         }
 
-        [Fact]
+        [TestMethod]
         public void CanUninstallSeveralSources_LegacySyntax()
         {
             string home = CreateTemporaryFolder(folderName: "Home");
@@ -225,7 +224,7 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
                 .ExitWith(0)
                 .And
                 .NotHaveStdErr()
-                .And.HaveStdOutMatching($"^Success: Microsoft\\.DotNet\\.Common\\.ProjectTemplates\\.5\\.0::([\\d\\.a-z-])+ was uninstalled\\.\\s*$", RegexOptions.Multiline)
+                .And.HaveStdOutMatching($"^Success: Microsoft\\.DotNet\\.Common\\.ProjectTemplates\\.5\\.0@([\\d\\.a-z-])+ was uninstalled\\.\\s*$", RegexOptions.Multiline)
                 .And.HaveStdOutContaining($"Success: {basicFSharp} was uninstalled.");
 
             new DotnetNewCommand(_log, "-u")
@@ -242,7 +241,7 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
                 .And.NotHaveStdOutContaining(basicFSharp);
         }
 
-        [Fact]
+        [TestMethod]
         public void CanUninstallSeveralSources()
         {
             string home = CreateTemporaryFolder(folderName: "Home");
@@ -271,7 +270,7 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
                 .ExitWith(0)
                 .And
                 .NotHaveStdErr()
-                .And.HaveStdOutMatching($"^Success: Microsoft\\.DotNet\\.Common\\.ProjectTemplates\\.5\\.0::([\\d\\.a-z-])+ was uninstalled\\.\\s*$", RegexOptions.Multiline)
+                .And.HaveStdOutMatching($"^Success: Microsoft\\.DotNet\\.Common\\.ProjectTemplates\\.5\\.0@([\\d\\.a-z-])+ was uninstalled\\.\\s*$", RegexOptions.Multiline)
                 .And.HaveStdOutContaining($"Success: {basicFSharp} was uninstalled.");
 
             new DotnetNewCommand(_log, "uninstall")
@@ -288,13 +287,13 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
                 .And.NotHaveStdOutContaining(basicFSharp);
         }
 
-        [Theory]
-        [InlineData("-u")]
-        [InlineData("uninstall")]
+        [TestMethod]
+        [DataRow("-u")]
+        [DataRow("uninstall")]
         public void CannotUninstallUnknownPackage(string commandName)
         {
             string home = CreateTemporaryFolder(folderName: "Home");
-            new DotnetNewCommand(_log, "install", "Microsoft.DotNet.Web.ProjectTemplates.5.0::5.0.0")
+            new DotnetNewCommand(_log, "install", "Microsoft.DotNet.Web.ProjectTemplates.5.0@5.0.0")
                 .WithCustomHive(home)
                 .WithWorkingDirectory(CreateTemporaryFolder())
                 .Execute()
@@ -316,13 +315,13 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
                 .And.HaveStdErrContaining("   dotnet new uninstall");
         }
 
-        [Theory]
-        [InlineData("-u")]
-        [InlineData("uninstall")]
+        [TestMethod]
+        [DataRow("-u")]
+        [DataRow("uninstall")]
         public void CannotUninstallByTemplateName(string commandName)
         {
             string home = CreateTemporaryFolder(folderName: "Home");
-            new DotnetNewCommand(_log, "install", "Microsoft.DotNet.Common.ProjectTemplates.5.0::5.0.0")
+            new DotnetNewCommand(_log, "install", "Microsoft.DotNet.Common.ProjectTemplates.5.0@5.0.0")
                 .WithCustomHive(home)
                 .WithWorkingDirectory(CreateTemporaryFolder())
                 .Execute()
@@ -338,19 +337,19 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
                 .Should().Fail()
                 .And.HaveStdErrContaining("The template package 'console' is not found")
                 .And.HaveStdErrContaining("The template 'console' is included to the packages:")
-                .And.HaveStdErrContaining("   Microsoft.DotNet.Common.ProjectTemplates.5.0::5.0.0 (contains 2 templates)")
+                .And.HaveStdErrContaining("   Microsoft.DotNet.Common.ProjectTemplates.5.0@5.0.0 (contains 2 templates)")
                 //                .And.HaveStdErrContaining("To list the templates installed in a package, use dotnet new <new option> <package name>")
                 .And.HaveStdErrContaining("To uninstall the template package use:")
                 .And.HaveStdErrContaining("   dotnet new uninstall Microsoft.DotNet.Common.ProjectTemplates.5.0");
         }
 
-        [Theory]
-        [InlineData("-u")]
-        [InlineData("uninstall")]
+        [TestMethod]
+        [DataRow("-u")]
+        [DataRow("uninstall")]
         public void CannotUninstallByTemplateName_ShowsAllPackages(string commandName)
         {
             string home = CreateTemporaryFolder(folderName: "Home");
-            new DotnetNewCommand(_log, "install", "Microsoft.DotNet.Common.ProjectTemplates.5.0::5.0.0")
+            new DotnetNewCommand(_log, "install", "Microsoft.DotNet.Common.ProjectTemplates.5.0@5.0.0")
                 .WithCustomHive(home).WithoutBuiltInTemplates()
                 .WithWorkingDirectory(CreateTemporaryFolder())
                 .Execute()
@@ -359,7 +358,7 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
                 .And
                 .NotHaveStdErr();
 
-            new DotnetNewCommand(_log, "install", "Microsoft.DotNet.Common.ProjectTemplates.3.1::5.0.0")
+            new DotnetNewCommand(_log, "install", "Microsoft.DotNet.Common.ProjectTemplates.3.1@5.0.0")
                 .WithCustomHive(home).WithoutBuiltInTemplates()
                 .WithWorkingDirectory(CreateTemporaryFolder())
                 .Execute()
@@ -375,15 +374,15 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
                 .Should().Fail()
                 .And.HaveStdErrContaining("The template package 'console' is not found")
                 .And.HaveStdErrContaining("The template 'console' is included to the packages:")
-                .And.HaveStdErrContaining("   Microsoft.DotNet.Common.ProjectTemplates.5.0::5.0.0 (contains 2 templates)")
-                .And.HaveStdErrContaining("   Microsoft.DotNet.Common.ProjectTemplates.3.1::5.0.0 (contains 2 templates)")
+                .And.HaveStdErrContaining("   Microsoft.DotNet.Common.ProjectTemplates.5.0@5.0.0 (contains 2 templates)")
+                .And.HaveStdErrContaining("   Microsoft.DotNet.Common.ProjectTemplates.3.1@5.0.0 (contains 2 templates)")
                 .And.HaveStdErrContaining("To uninstall the template package use:")
                 .And.HaveStdErrContaining("   dotnet new uninstall Microsoft.DotNet.Common.ProjectTemplates.");
         }
 
-        [Theory]
-        [InlineData("-u")]
-        [InlineData("uninstall")]
+        [TestMethod]
+        [DataRow("-u")]
+        [DataRow("uninstall")]
         public void CanExpandWhenUninstall(string commandName)
         {
             string home = CreateTemporaryFolder(folderName: "Home");
@@ -432,7 +431,7 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
                 .And.HaveStdOutContaining("(No Items)");
         }
 
-        [Fact]
+        [TestMethod]
         public void CanResolveRelativePathOnUninstall()
         {
             string home = CreateTemporaryFolder(folderName: "Home");
@@ -474,7 +473,7 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
                 .And.HaveStdOutContaining("(No Items)");
         }
 
-        [Fact]
+        [TestMethod]
         public void CanListTemplateInstalledFromFolderWithSpace()
         {
             string home = CreateTemporaryFolder(folderName: "Home");
@@ -506,9 +505,9 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
                 .And.HaveStdOutContaining($"         dotnet new uninstall {testFolderWithoutSpace}");
         }
 
-        [Theory]
-        [InlineData("-u")]
-        [InlineData("--uninstall")]
+        [TestMethod]
+        [DataRow("-u")]
+        [DataRow("--uninstall")]
         public void CanShowDeprecationMessage_WhenLegacyCommandIsUsed(string commandName)
         {
             const string deprecationMessage =
@@ -528,7 +527,7 @@ For more information, run:
             Assert.StartsWith(deprecationMessage, commandResult.StdOut);
         }
 
-        [Fact]
+        [TestMethod]
         public void DoNotShowDeprecationMessage_WhenNewCommandIsUsed()
         {
             string home = CreateTemporaryFolder(folderName: "Home");

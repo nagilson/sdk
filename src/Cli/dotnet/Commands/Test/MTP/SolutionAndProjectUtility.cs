@@ -1,15 +1,18 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Immutable;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Build.Definition;
 using Microsoft.Build.Evaluation;
 using Microsoft.Build.Evaluation.Context;
 using Microsoft.Build.Execution;
 using Microsoft.DotNet.Cli.Commands.Run;
-using Microsoft.DotNet.Cli.Commands.Run.LaunchSettings;
+using Microsoft.DotNet.Cli.Extensions;
 using Microsoft.DotNet.Cli.Utils;
 using Microsoft.DotNet.Cli.Utils.Extensions;
+using Microsoft.DotNet.ProjectTools;
 
 namespace Microsoft.DotNet.Cli.Commands.Test;
 
@@ -17,6 +20,18 @@ internal static class SolutionAndProjectUtility
 {
     private static readonly string[] s_computeRunArgumentsTarget = [Constants.ComputeRunArguments];
     private static readonly Lock s_buildLock = new();
+
+    /// <summary>
+    /// Parses MSBuild args with the standard set of test command options.
+    /// </summary>
+    internal static MSBuildArgs AnalyzeStandardTestMSBuildArgs(IEnumerable<string> args) =>
+        MSBuildArgs.AnalyzeMSBuildArguments(
+            args,
+            CommonOptions.CreatePropertyOption(),
+            CommonOptions.CreateRestorePropertyOption(),
+            CommonOptions.CreateMSBuildTargetOption(),
+            CommonOptions.CreateVerbosityOption(),
+            CommonOptions.CreateNoLogoOption());
 
     public static (bool SolutionOrProjectFileFound, string Message) TryGetProjectOrSolutionFilePath(string directory, out string projectOrSolutionFilePath, out bool isSolution)
     {
@@ -115,31 +130,6 @@ internal static class SolutionAndProjectUtility
         return (true, string.Empty);
     }
 
-    public static (bool ProjectFileFound, string Message) TryGetProjectFilePath(string directory, out string projectFilePath)
-    {
-        projectFilePath = string.Empty;
-
-        if (!Directory.Exists(directory))
-        {
-            return (false, string.Format(CliCommandStrings.CmdNonExistentDirectoryErrorDescription, directory));
-        }
-
-        var actualProjectFiles = GetProjectFilePaths(directory);
-
-        if (actualProjectFiles.Length == 0)
-        {
-            return (false, string.Format(CliStrings.CouldNotFindAnyProjectInDirectory, directory));
-        }
-
-        if (actualProjectFiles.Length == 1)
-        {
-            projectFilePath = actualProjectFiles[0];
-            return (true, string.Empty);
-        }
-
-        return (false, string.Format(CliStrings.MoreThanOneProjectInDirectory, directory));
-    }
-
     public static (bool SolutionFileFound, string Message) TryGetSolutionFilePath(string directory, out string solutionFilePath)
     {
         solutionFilePath = string.Empty;
@@ -177,17 +167,51 @@ internal static class SolutionAndProjectUtility
 
     private static string[] GetProjectFilePaths(string directory) => Directory.GetFiles(directory, CliConstants.ProjectExtensionPattern, SearchOption.TopDirectoryOnly);
 
-    private static ProjectInstance EvaluateProject(ProjectCollection collection, EvaluationContext evaluationContext, string projectFilePath, string? tfm)
+    private static ProjectInstance EvaluateProject(
+        ProjectCollection collection,
+        EvaluationContext evaluationContext,
+        string projectFilePath,
+        string? tfm,
+        string? configuration,
+        string? platform)
     {
         Debug.Assert(projectFilePath is not null);
 
         Dictionary<string, string>? globalProperties = null;
+        var capacity = 0;
+
         if (tfm is not null)
         {
-            globalProperties = new Dictionary<string, string>(capacity: 1)
+            capacity++;
+        }
+
+        if (configuration is not null)
+        {
+            capacity++;
+        }
+
+        if (platform is not null)
+        {
+            capacity++;
+        }
+
+        if (capacity > 0)
+        {
+            globalProperties = new Dictionary<string, string>(capacity);
+            if (tfm is not null)
             {
-                { ProjectProperties.TargetFramework, tfm }
-            };
+                globalProperties.Add(ProjectProperties.TargetFramework, tfm);
+            }
+
+            if (configuration is not null)
+            {
+                globalProperties.Add(ProjectProperties.Configuration, configuration);
+            }
+
+            if (platform is not null)
+            {
+                globalProperties.Add(ProjectProperties.Platform, platform);
+            }
         }
 
         // Merge the global properties from the project collection.
@@ -209,17 +233,18 @@ internal static class SolutionAndProjectUtility
         });
     }
 
-    public static string GetRootDirectory(string solutionOrProjectFilePath)
-    {
-        string? fileDirectory = Path.GetDirectoryName(solutionOrProjectFilePath);
-        Debug.Assert(fileDirectory is not null);
-        return string.IsNullOrEmpty(fileDirectory) ? Directory.GetCurrentDirectory() : fileDirectory;
-    }
-
-    public static IEnumerable<ParallelizableTestModuleGroupWithSequentialInnerModules> GetProjectProperties(string projectFilePath, ProjectCollection projectCollection, EvaluationContext evaluationContext, BuildOptions buildOptions)
+    [RequiresDynamicCode("Uses MSBuild Object Model types, which are not AOT-safe")]
+    public static IEnumerable<ParallelizableTestModuleGroupWithSequentialInnerModules> GetProjectProperties(
+        string projectFilePath,
+        ProjectCollection projectCollection,
+        EvaluationContext evaluationContext,
+        BuildOptions buildOptions,
+        FacadeLogger? logger,
+        string? configuration,
+        string? platform)
     {
         var projects = new List<ParallelizableTestModuleGroupWithSequentialInnerModules>();
-        ProjectInstance projectInstance = EvaluateProject(projectCollection, evaluationContext, projectFilePath, null);
+        ProjectInstance projectInstance = EvaluateProject(projectCollection, evaluationContext, projectFilePath, tfm: null, configuration, platform);
 
         var targetFramework = projectInstance.GetPropertyValue(ProjectProperties.TargetFramework);
         var targetFrameworks = projectInstance.GetPropertyValue(ProjectProperties.TargetFrameworks);
@@ -228,7 +253,7 @@ internal static class SolutionAndProjectUtility
 
         if (!string.IsNullOrEmpty(targetFramework) || string.IsNullOrEmpty(targetFrameworks))
         {
-            if (GetModuleFromProject(projectInstance, buildOptions) is { } module)
+            if (GetModuleFromProject(projectInstance, buildOptions, logger) is { } module)
             {
                 projects.Add(new ParallelizableTestModuleGroupWithSequentialInnerModules(module));
             }
@@ -253,10 +278,10 @@ internal static class SolutionAndProjectUtility
             {
                 foreach (var framework in frameworks)
                 {
-                    projectInstance = EvaluateProject(projectCollection, evaluationContext, projectFilePath, framework);
+                    projectInstance = EvaluateProject(projectCollection, evaluationContext, projectFilePath, framework, configuration, platform);
                     Logger.LogTrace($"Loaded inner project '{Path.GetFileName(projectFilePath)}' has '{ProjectProperties.IsTestingPlatformApplication}' = '{projectInstance.GetPropertyValue(ProjectProperties.IsTestingPlatformApplication)}' (TFM: '{framework}').");
 
-                    if (GetModuleFromProject(projectInstance, buildOptions) is { } module)
+                    if (GetModuleFromProject(projectInstance, buildOptions, logger) is { } module)
                     {
                         projects.Add(new ParallelizableTestModuleGroupWithSequentialInnerModules(module));
                     }
@@ -267,10 +292,10 @@ internal static class SolutionAndProjectUtility
                 List<TestModule>? innerModules = null;
                 foreach (var framework in frameworks)
                 {
-                    projectInstance = EvaluateProject(projectCollection, evaluationContext, projectFilePath, framework);
+                    projectInstance = EvaluateProject(projectCollection, evaluationContext, projectFilePath, framework, configuration, platform);
                     Logger.LogTrace($"Loaded inner project '{Path.GetFileName(projectFilePath)}' has '{ProjectProperties.IsTestingPlatformApplication}' = '{projectInstance.GetPropertyValue(ProjectProperties.IsTestingPlatformApplication)}' (TFM: '{framework}').");
 
-                    if (GetModuleFromProject(projectInstance, buildOptions) is { } module)
+                    if (GetModuleFromProject(projectInstance, buildOptions, logger) is { } module)
                     {
                         innerModules ??= new List<TestModule>();
                         innerModules.Add(module);
@@ -287,7 +312,147 @@ internal static class SolutionAndProjectUtility
         return projects;
     }
 
-    private static TestModule? GetModuleFromProject(ProjectInstance project, BuildOptions buildOptions)
+    /// <summary>
+    /// Performs device selection for each TFM BEFORE the build, so that device-provided
+    /// RuntimeIdentifiers are included in the build. Returns a result with device mappings
+    /// and TestTfmsInParallel setting, or null if no device selection is needed.
+    /// When projectCollection/evaluationContext are provided, reuses them to avoid redundant evaluation.
+    /// </summary>
+    internal static DeviceSelectionResult? SelectDevicesBeforeBuild(
+        string projectFilePath,
+        BuildOptions buildOptions,
+        ProjectCollection? projectCollection = null,
+        EvaluationContext? evaluationContext = null,
+        FacadeLogger? logger = null)
+    {
+        // --device is already handled by HandleDeviceWithTargetFrameworkSelection
+        if (!string.IsNullOrWhiteSpace(buildOptions.Device))
+        {
+            return null;
+        }
+
+        var msbuildArgs = AnalyzeStandardTestMSBuildArgs(buildOptions.MSBuildArgs);
+
+        var globalProperties = CommonRunHelpers.GetGlobalPropertiesFromArgs(msbuildArgs);
+
+        // If Device is already set via -p:Device=..., skip device selection
+        if (globalProperties.TryGetValue("Device", out var deviceProp) && !string.IsNullOrWhiteSpace(deviceProp))
+        {
+            return null;
+        }
+
+        // Create a ProjectCollection if one wasn't provided
+        using var ownedCollection = projectCollection is null
+            ? new ProjectCollection(globalProperties, loggers: logger is null ? null : [logger], toolsetDefinitionLocations: ToolsetDefinitionLocations.Default)
+            : null;
+        var collection = projectCollection ?? ownedCollection!;
+        evaluationContext ??= EvaluationContext.Create(EvaluationContext.SharingPolicy.Shared);
+
+        var projectInstance = ProjectInstance.FromFile(projectFilePath, new ProjectOptions
+        {
+            GlobalProperties = collection.GlobalProperties,
+            EvaluationContext = evaluationContext,
+            ProjectCollection = collection,
+        });
+
+        // If the project doesn't support device selection, skip entirely
+        if (!projectInstance.Targets.ContainsKey(Constants.ComputeAvailableDevices))
+        {
+            return null;
+        }
+
+        var targetFramework = projectInstance.GetPropertyValue(ProjectProperties.TargetFramework);
+        var targetFrameworks = projectInstance.GetPropertyValue(ProjectProperties.TargetFrameworks);
+
+        // Read TestTfmsInParallel from the initial evaluation so callers don't need to re-evaluate
+        bool testTfmsInParallel = true;
+        if (bool.TryParse(projectInstance.GetPropertyValue(ProjectProperties.TestTfmsInParallel), out bool parsed) ||
+            bool.TryParse(projectInstance.GetPropertyValue(ProjectProperties.BuildInParallel), out parsed))
+        {
+            testTfmsInParallel = parsed;
+        }
+
+        bool isInteractive = !Console.IsOutputRedirected && !new Telemetry.CIEnvironmentDetectorForTelemetry().IsCIEnvironment();
+
+        IEnumerable<string> frameworks;
+        if (!string.IsNullOrEmpty(targetFramework) || string.IsNullOrEmpty(targetFrameworks))
+        {
+            // Single TFM (either explicit or via -f/--framework)
+            frameworks = [targetFramework ?? string.Empty];
+        }
+        else
+        {
+            frameworks = targetFrameworks
+                .Split(CliConstants.SemiColon, StringSplitOptions.RemoveEmptyEntries)
+                .Select(f => f.Trim())
+                .Where(f => !string.IsNullOrEmpty(f));
+        }
+
+        var devicesByTfm = new Dictionary<string, (string? Device, string? RuntimeIdentifier)>();
+        foreach (var framework in frameworks)
+        {
+            var (device, rid) = SelectDeviceForTfm(projectFilePath, buildOptions, framework, isInteractive, logger);
+            devicesByTfm[framework] = (device, rid);
+        }
+
+        return devicesByTfm.Values.Any(v => v.Device is not null)
+            ? new DeviceSelectionResult(devicesByTfm, testTfmsInParallel)
+            : null;
+    }
+
+    internal sealed record DeviceSelectionResult(
+        Dictionary<string, (string? Device, string? RuntimeIdentifier)> DevicesByTfm,
+        bool TestTfmsInParallel);
+
+    /// <summary>
+    /// Selects a device for a specific TFM using RunCommandSelector.
+    /// Returns (null, null) if no device support or no devices available for this TFM.
+    /// </summary>
+    private static (string? device, string? runtimeIdentifier) SelectDeviceForTfm(
+        string projectFilePath,
+        BuildOptions buildOptions,
+        string? tfm,
+        bool isInteractive,
+        FacadeLogger? logger)
+    {
+        var msbuildArgsToAppend = buildOptions.MSBuildArgs;
+        if (!string.IsNullOrEmpty(tfm))
+        {
+            msbuildArgsToAppend = msbuildArgsToAppend.Append($"-p:{ProjectProperties.TargetFramework}={tfm}");
+        }
+
+        var msbuildArgs = AnalyzeStandardTestMSBuildArgs(msbuildArgsToAppend);
+
+        using var selector = new RunCommandSelector(
+            projectFilePath,
+            isInteractive,
+            msbuildArgs,
+            ImmutableDictionary<string, string>.Empty,
+            commandName: "dotnet test",
+            logger);
+
+        lock (s_buildLock)
+        {
+            if (!selector.TrySelectDevice(
+                listDevices: false,
+                noRestore: buildOptions.HasNoRestore || buildOptions.HasNoBuild,
+                out var selectedDevice,
+                out var runtimeIdentifier,
+                out _))
+            {
+                throw new GracefulException(
+                    string.Format(CliCommandStrings.RunCommandExceptionUnableToRunSpecifyDevice, "--device"));
+            }
+
+            return (selectedDevice, runtimeIdentifier);
+        }
+    }
+
+    [RequiresDynamicCode("Uses MSBuild Object Model types, which are not AOT-safe")]
+    private static TestModule? GetModuleFromProject(
+        ProjectInstance project,
+        BuildOptions buildOptions,
+        FacadeLogger? logger)
     {
         _ = bool.TryParse(project.GetPropertyValue(ProjectProperties.IsTestProject), out bool isTestProject);
         _ = bool.TryParse(project.GetPropertyValue(ProjectProperties.IsTestingPlatformApplication), out bool isTestingPlatformApplication);
@@ -305,7 +470,7 @@ internal static class SolutionAndProjectUtility
         RunProperties runProperties;
         if (isTestingPlatformApplication)
         {
-            runProperties = GetRunProperties(project);
+            runProperties = DeployAndGetRunProperties(project, logger);
 
             // dotnet run throws the same if RunCommand is null or empty.
             // In dotnet test, we are additionally checking that RunCommand is not dll.
@@ -345,7 +510,9 @@ internal static class SolutionAndProjectUtility
 
         return new TestModule(runProperties, PathUtility.FixFilePath(projectFullPath), targetFramework, isTestingPlatformApplication, launchSettings, project.GetPropertyValue(ProjectProperties.TargetPath), rootVariableName);
 
-        static RunProperties GetRunProperties(ProjectInstance project)
+        [RequiresDynamicCode("Uses MSBuild Object Model types, which are not AOT-safe")]
+        [UnconditionalSuppressMessage("AOT", "IL2026", Justification = "Temporary unblock for dotnet/msbuild#14064 (MSBuild build APIs are now [RequiresUnreferencedCode]). dotnet CLI runs MSBuild in-proc (not trimmed). Remove when dotnet/sdk#55225 is fixed.")]
+        static RunProperties DeployAndGetRunProperties(ProjectInstance project, FacadeLogger? logger)
         {
             // Build API cannot be called in parallel, even if the projects are different.
             // Otherwise, BuildManager in MSBuild will fail:
@@ -353,7 +520,14 @@ internal static class SolutionAndProjectUtility
             // NOTE: BuildManager is singleton.
             lock (s_buildLock)
             {
-                if (!project.Build(s_computeRunArgumentsTarget, loggers: null))
+                var loggers = logger is null ? null : new[] { logger };
+                if (project.Targets.ContainsKey(Constants.DeployToDevice) &&
+                    !project.Build([Constants.DeployToDevice], loggers))
+                {
+                    throw new GracefulException(CliCommandStrings.RunCommandDeployFailed);
+                }
+
+                if (!project.Build(s_computeRunArgumentsTarget, loggers))
                 {
                     throw new GracefulException(CliCommandStrings.RunCommandEvaluationExceptionBuildFailed, s_computeRunArgumentsTarget[0]);
                 }
@@ -363,17 +537,17 @@ internal static class SolutionAndProjectUtility
         }
     }
 
-    private static ProjectLaunchSettingsModel? TryGetLaunchProfileSettings(string projectDirectory, string projectNameWithoutExtension, string appDesignerFolder, BuildOptions buildOptions, string? profileName)
+    private static LaunchProfile? TryGetLaunchProfileSettings(string projectDirectory, string projectNameWithoutExtension, string appDesignerFolder, BuildOptions buildOptions, string? profileName)
     {
         if (buildOptions.NoLaunchProfile)
         {
             return null;
         }
 
-        var launchSettingsPath = CommonRunHelpers.GetPropertiesLaunchSettingsPath(projectDirectory, appDesignerFolder);
+        var launchSettingsPath = LaunchSettings.GetPropertiesLaunchSettingsPath(projectDirectory, appDesignerFolder);
         bool hasLaunchSettings = File.Exists(launchSettingsPath);
 
-        var runJsonPath = CommonRunHelpers.GetFlatLaunchSettingsPath(projectDirectory, projectNameWithoutExtension);
+        var runJsonPath = LaunchSettings.GetFlatLaunchSettingsPath(projectDirectory, projectNameWithoutExtension);
         bool hasRunJson = File.Exists(runJsonPath);
 
         if (hasLaunchSettings)
@@ -395,16 +569,16 @@ internal static class SolutionAndProjectUtility
         // If buildOptions.Verbosity is null, we still want to print the message.
         if (buildOptions.Verbosity != VerbosityOptions.quiet)
         {
-            Reporter.Output.WriteLine(string.Format(CliCommandStrings.UsingLaunchSettingsFromMessage, launchSettingsPath));
+            Reporter.Error.WriteLine(string.Format(CliCommandStrings.UsingLaunchSettingsFromMessage, launchSettingsPath));
         }
 
-        var result = LaunchSettingsManager.TryApplyLaunchSettings(launchSettingsPath, profileName);
-        if (!result.Success)
+        var result = LaunchSettings.ReadProfileSettingsFromFile(launchSettingsPath, profileName);
+        if (!result.Successful)
         {
             Reporter.Error.WriteLine(string.Format(CliCommandStrings.RunCommandExceptionCouldNotApplyLaunchSettings, profileName, result.FailureReason).Bold().Red());
             return null;
         }
 
-        return result.LaunchSettings;
+        return result.Profile;
     }
 }

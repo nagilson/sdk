@@ -21,11 +21,13 @@ using Parser = Microsoft.DotNet.Cli.Parser;
 
 namespace Microsoft.DotNet.Tests.Commands.Tool
 {
+    [TestClass]
     public class ToolUpdateLocalCommandTests
     {
         private readonly IFileSystem _fileSystem;
         private readonly string _temporaryDirectoryParent;
-        private readonly ParseResult _parseResult;
+        private readonly ParseResult _parseResultRestore;
+        private readonly ParseResult _parseResultUpdate;
         private readonly ParseResult _parseResultUpdateAll;
         private readonly BufferedReporter _reporter;
         private readonly string _temporaryDirectory;
@@ -104,11 +106,12 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
                 new FakeDangerousFileDetector());
             _toolManifestEditor = new ToolManifestEditor(_fileSystem, new FakeDangerousFileDetector());
 
-            _parseResult = Parser.Parse($"dotnet tool update {_packageIdA.ToString()}");
+            _parseResultRestore = Parser.Parse($"dotnet tool restore");
+            _parseResultUpdate = Parser.Parse($"dotnet tool update {_packageIdA}");
             _parseResultUpdateAll = Parser.Parse($"dotnet tool update --all --local");
 
             _toolRestoreCommand = new ToolRestoreCommand(
-                _parseResult,
+                _parseResultRestore,
                 _toolPackageDownloaderMock,
                 _toolManifestFinder,
                 _localToolsResolverCache,
@@ -117,7 +120,7 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
             );
 
             _defaultToolUpdateLocalCommand = new ToolUpdateLocalCommand(
-                _parseResult,
+                _parseResultUpdate,
                 _toolPackageDownloaderMock,
                 _toolManifestFinder,
                 _toolManifestEditor,
@@ -133,7 +136,7 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
                 _reporter);
         }
 
-        [Fact]
+        [TestMethod]
         public void WhenPassingRestoreActionConfigOptions()
         {
             var parseResult = Parser.Parse($"dotnet tool update {_packageIdA.ToString()} --ignore-failed-sources");
@@ -141,7 +144,7 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
             command._toolInstallLocalCommand.Value.restoreActionConfig.IgnoreFailedSources.Should().BeTrue();
         }
 
-        [Fact]
+        [TestMethod]
         public void WhenPassingIgnoreFailedSourcesItShouldNotThrow()
         {
             _fileSystem.File.WriteAllText(Path.Combine(_temporaryDirectory, "nuget.config"), _nugetConfigWithInvalidSources);
@@ -159,7 +162,7 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
             _fileSystem.File.Delete(Path.Combine(_temporaryDirectory, "nuget.config"));
         }
 
-        [Fact]
+        [TestMethod]
         public void WhenRunWithPackageIdItShouldUpdateFromManifestFile()
         {
             _toolRestoreCommand.Execute();
@@ -170,7 +173,7 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
             AssertUpdateSuccess();
         }
 
-        [Fact]
+        [TestMethod]
         public void WhenRunWithUpdateAllItShouldUpdateFromManifestFile()
         {
             _toolRestoreCommand.Execute();
@@ -192,16 +195,16 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
             AssertUpdateSuccess(packageIdExpected: _packageIdB.ToString());
         }
 
-        [Fact]
+        [TestMethod]
         public void WhenRunFromDirectorWithPackageIdItShouldUpdateFromManifestFile()
         {
             _toolRestoreCommand.Execute();
             _mockFeed.Packages[0].Version = _packageNewVersionA.ToNormalizedString();
 
             var toolUpdateCommand = new ToolUpdateCommand(
-                _parseResult,
+                _parseResultUpdate,
                 _reporter,
-                new ToolUpdateGlobalOrToolPathCommand(_parseResult),
+                new ToolUpdateGlobalOrToolPathCommand(_parseResultUpdate),
                 _defaultToolUpdateLocalCommand);
 
             toolUpdateCommand.Execute().Should().Be(0);
@@ -209,7 +212,7 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
             AssertUpdateSuccess();
         }
 
-        [Fact]
+        [TestMethod]
         public void GivenNoRestoredManifestWhenRunWithPackageIdItShouldUpdateFromManifestFile()
         {
             _mockFeed.Packages[0].Version = _packageNewVersionA.ToNormalizedString();
@@ -219,7 +222,7 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
             AssertUpdateSuccess();
         }
 
-        [Fact]
+        [TestMethod]
         public void GivenManifestDoesNotHavePackageWhenRunWithPackageIdItShouldUpdate()
         {
             _mockFeed.Packages[0].Version = _packageNewVersionA.ToNormalizedString();
@@ -231,7 +234,7 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
             AssertUpdateSuccess();
         }
 
-        [Fact]
+        [TestMethod]
         public void GivenNoManifestFileItShouldThrow()
         {
             _fileSystem.File.Delete(_manifestFilePath);
@@ -241,7 +244,7 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
                 .Contain(string.Format(CliStrings.CannotFindAManifestFile, ""));
         }
 
-        [Fact]
+        [TestMethod]
         public void WhenRunWithExplicitManifestFileItShouldUpdateFromExplicitManifestFile()
         {
             string explicitManifestFilePath = Path.Combine(_temporaryDirectory, "subdirectory", "dotnet-tools.json");
@@ -268,7 +271,7 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
             AssertUpdateSuccess(new FilePath(explicitManifestFilePath));
         }
 
-        [Fact]
+        [TestMethod]
         public void WhenRunFromToolUpdateRedirectCommandWithPackageIdItShouldUpdateFromManifestFile()
         {
             ParseResult parseResult = Parser.Parse($"dotnet tool update {_packageIdA.ToString()}");
@@ -290,7 +293,7 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
             toolUpdateCommand.Execute().Should().Be(0);
         }
 
-        [Fact]
+        [TestMethod]
         public void WhenRunWithPackageIdItShouldShowSuccessMessage()
         {
             _toolRestoreCommand.Execute();
@@ -309,7 +312,7 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
                         _manifestFilePath).Green());
         }
 
-        [Fact]
+        [TestMethod]
         public void GivenParentDirHasManifestWithSamePackageIdWhenRunWithPackageIdItShouldOnlyChangTheClosestOne()
         {
             var parentManifestFilePath = Path.Combine(_temporaryDirectoryParent, "dotnet-tools.json");
@@ -326,7 +329,7 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
             _fileSystem.File.ReadAllText(parentManifestFilePath).Should().Be(_jsonContent, "no change");
         }
 
-        [Fact]
+        [TestMethod]
         public void GivenParentDirHasManifestWithSamePackageIdWhenRunWithPackageIdItShouldWarningTheOtherManifests()
         {
             var parentManifestFilePath = Path.Combine(_temporaryDirectoryParent, "dotnet-tools.json");
@@ -342,7 +345,7 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
             _reporter.Lines[0].Should().NotContain(_manifestFilePath);
         }
 
-        [Fact]
+        [TestMethod]
         public void GivenFeedVersionIsTheSameWhenRunWithPackageIdItShouldShowDifferentSuccessMessage()
         {
             _toolRestoreCommand.Execute();
@@ -361,7 +364,7 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
                         _manifestFilePath));
         }
 
-        [Fact]
+        [TestMethod]
         public void GivenFeedVersionIsLowerRunPackageIdItShouldThrow()
         {
             _toolRestoreCommand.Execute();
@@ -376,7 +379,7 @@ namespace Microsoft.DotNet.Tests.Commands.Tool
                 _manifestFilePath));
         }
 
-        [Fact]
+        [TestMethod]
         public void GivenFeedVersionIsLowerWithDowngradeFlagRunPackageIdItShouldSucceeds()
         {
             _reporter.Clear();

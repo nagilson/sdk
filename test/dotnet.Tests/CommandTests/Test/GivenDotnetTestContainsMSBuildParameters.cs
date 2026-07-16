@@ -8,21 +8,22 @@ using Microsoft.DotNet.Tools.Test.Utilities;
 
 namespace Microsoft.DotNet.Cli.Test.Tests
 {
+    [TestClass]
     public class GivenDotnetTestContainsMSBuildParameters : SdkTest
     {
         private const string TestAppName = "VSTestMSBuildParameters";
         private const string MSBuildParameter = "/p:Version=1.2.3";
 
-        public GivenDotnetTestContainsMSBuildParameters(ITestOutputHelper log) : base(log)
+        public GivenDotnetTestContainsMSBuildParameters()
         {
         }
 
-        [InlineData($"{TestAppName}.csproj")]
-        [InlineData(null)]
-        [Theory]
+        [DataRow($"{TestAppName}.csproj")]
+        [DataRow(null)]
+        [TestMethod]
         public void ItPassesEnvironmentVariablesFromCommandLineParametersWhenRunningViaCsproj(string projectName)
         {
-            var testAsset = _testAssetsManager.CopyTestAsset(TestAppName)
+            var testAsset = TestAssetsManager.CopyTestAsset(TestAppName)
                 .WithSource()
                 .WithVersionVariables();
 
@@ -32,7 +33,7 @@ namespace Microsoft.DotNet.Cli.Test.Tests
                                     .WithWorkingDirectory(testRoot)
                                     .Execute("--logger", "console;verbosity=detailed", MSBuildParameter);
 
-            if (!TestContext.IsLocalized())
+            if (!SdkTestContext.IsLocalized())
             {
                 result.StdOut
                     .Should().Contain("Total tests: 1")
