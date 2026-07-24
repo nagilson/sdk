@@ -47,13 +47,17 @@ function validateIssueBody(body) {
   }
 }
 
+function withTitlePrefix(title) {
+  return `${TITLE_PREFIX}${title.replace(/^(?:\[AI discovered CI\]\s*)+/i, "")}`;
+}
+
 function prepareOrdinaryIssue(item) {
   validateIssueBody(item.body);
   if (/^## Error Message\s*$/m.test(item.body)) {
     throw new Error("Ordinary CI issues must not contain a Build Analysis Error Message section.");
   }
   return {
-    title: `${TITLE_PREFIX}${item.title}`,
+    title: withTitlePrefix(item.title),
     body: withSignature(item.body, item.signature),
     labels: ["agentic-workflows"]
   };
@@ -71,7 +75,7 @@ function prepareKbeIssue(item, observations) {
   }
   const body = `${item.body.trim()}\n\n${errorMessageBlock(observation.kbe)}`;
   return {
-    title: `${TITLE_PREFIX}${item.title}`,
+    title: withTitlePrefix(item.title),
     body: withSignature(body, item.signature),
     labels: ["agentic-workflows", "Known Build Error"]
   };
