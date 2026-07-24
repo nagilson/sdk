@@ -16,7 +16,28 @@ const validatedTest = {
   }
 };
 
-function output(issueKind, body = "## Build Information\nBuild failed in CI.") {
+const validBody = `## Build Information
+Build failed in CI.
+
+## Failure History
+One observed failure.
+
+## Error Details
+Specific error.
+
+## Root Cause Analysis
+**Observed:** The task emitted the specific error.
+
+**Assessment:** The proximate cause is established; the underlying cause is not.
+
+**Confidence:** Medium
+
+**Alternatives / Unknowns:** Target-branch behavior is unknown.
+
+## Suggested Investigation
+Compare the target-branch build.`;
+
+function output(issueKind, body = validBody) {
   return { items: [{
     type: "create_ci_quality_issue",
     issue_kind: issueKind,
@@ -58,6 +79,15 @@ test("non-test and unvalidated signatures cannot become KBEs", () => {
 
 test("ordinary issues cannot smuggle a KBE block", () => {
   assert.throws(
-    () => prepareIssues(output("ordinary", "## Error Message\n```json\n{}\n```"), { failures: [] }),
+    () => prepareIssues(output("ordinary", `${validBody}\n\n## Error Message\n\`\`\`json\n{}\n\`\`\``), { failures: [] }),
     /must not contain/);
+});
+
+test("issues require a bounded root cause analysis", () => {
+  assert.throws(
+    () => prepareIssues(output("ordinary", "## Build Information\nBuild failed."), { failures: [] }),
+    /missing required sections/);
+  assert.throws(
+    () => prepareIssues(output("ordinary", validBody.replace("**Confidence:** Medium", "**Confidence:** Maybe")), { failures: [] }),
+    /confidence must be High, Medium, or Low/);
 });

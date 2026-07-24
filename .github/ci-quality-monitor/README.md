@@ -19,7 +19,9 @@ job runs before the agent:
    builds for each allowlisted pipeline and branch.
 3. Exclude PR builds and builds already present in the ledger.
 4. Collect bounded timeline, public Helix work-item, TRX, artifact, and log
-  evidence for new failures.
+  evidence for new failures. TRX evidence includes aggregate result counts;
+  hang/crash evidence includes the active-test line, host exit code, watchdog
+  sequence, and dump-capture failures when present.
 5. Save the updated ledger under a run-specific immutable cache key.
 6. Skip the agent when there are no new failed builds.
 7. Give the agent a structured dossier when investigation is required.
@@ -34,7 +36,9 @@ Anonymous access currently works for public SDK build metadata and timeline
 records, including structured task issues. Public Helix work-item APIs also
 provide exit codes, console logs, TRX files, binlogs, and dumps; the collector
 uses those artifacts to recover named test failures or classify result-less
-timeouts and crashes. Anonymous AzDO test-run queries return `404`, and direct
+timeouts and crashes. It retains recovered TRX pass/fail totals even when no
+assertion failed, and extracts bounded hang/watchdog, host-exit, and dump-capture
+details so a wrapper crash is not mistaken for a test assertion. Anonymous AzDO test-run queries return `404`, and direct
 AzDO build-log downloads return `500` for the tested public SDK builds. The
 collector records unavailable evidence and never invents missing test details.
 
@@ -55,6 +59,43 @@ it fails for different reasons.
 A branch heartbeat compares the registered GitHub head with recent AzDO builds.
 It tolerates batched CI, waits 90 minutes, and requires two consecutive misses
 before reporting that a pipeline did not start.
+
+## Relationship to `ci-analysis`
+
+The monitor follows the same core investigation rules as the `ci-analysis`
+skill: classify every failure independently, recover test results from crashed
+or canceled Helix work items, suppress dependency cascades, cross-reference
+existing issues per failure, and avoid calling a failure flaky,
+infrastructure-owned, PR-related, or safe to retry without evidence.
+
+The two workflows have different operating constraints. `ci-analysis` is an
+interactive PR investigation that can query Build Analysis, PR metadata and
+changed files, target-branch builds, build progression, binlogs, and additional
+AzDO or Helix data. This scheduled monitor pays the retrieval cost once in its
+deterministic collector and gives the agent a bounded public dossier. It does
+not imply that Build Analysis, target-branch behavior, PR correlation, or a
+binlog was checked when those facts are absent.
+
+`ci-analysis` also routes broad engineering-service failures to
+`dotnet/dnceng`. The monitor's constrained output can create issues only in the
+SDK repository, so production runs report only repository-specific tests,
+product build breaks, and SDK-owned CI integrations. A broad Azure DevOps,
+Helix, machine-pool, or external-feed outage becomes a no-op with an explicit
+routing reason rather than a misplaced SDK issue.
+
+Every proposed issue must therefore contain a bounded root cause analysis with
+the observed facts, the most specific supported causal chain, a confidence
+level, alternatives or unknowns, and the next discriminating check. Recurrence
+can establish that a failure is flaky, but it does not by itself establish why
+the failure occurs. Checks that need broader context are recorded as suggested
+investigation rather than represented as completed analysis.
+
+The bounded dossier intentionally does not include dump contents, source-level
+test mapping, PR changed-file correlation, target-branch comparison, Build
+Analysis status, or full multi-commit progression. Those are deeper interactive
+checks. The issue RCA must identify them as missing evidence when they are
+needed to move from a high-confidence proximate cause, such as a watchdog
+terminating a hung test host, to the underlying product or infrastructure cause.
 
 ## State and Bootstrap
 
@@ -104,6 +145,9 @@ Issue creation is initially configured in staged mode. A preview requires:
 - for test KBEs, a collector-generated Build Analysis `ErrorMessage` validated
   against the original TRX lines using Arcade's ordered `String.Contains`
   semantics
+- an evidence-bounded root cause analysis that separates observed facts from
+  inference, states `High`, `Medium`, or `Low` confidence, identifies remaining
+  alternatives or unknowns, and leads with the next discriminating check
 
 The custom issue applicator enforces two separate paths:
 
@@ -115,6 +159,11 @@ The custom issue applicator enforces two separate paths:
   build. The applicator rejects non-recurring or unvalidated signatures and
   generates the `## Error Message` block; the agent cannot author or override
   it.
+
+For both paths, the applicator rejects bodies missing `Build Information`,
+`Failure History`, `Error Details`, `Root Cause Analysis`, or `Suggested
+Investigation`. The RCA must explicitly include observed evidence, assessment,
+confidence, and alternatives or unknowns.
 
 The monitor never applies `cookie`. Normal issue triage can add an area, type,
 `Test Debt`, and `cookie` when the resulting work is bounded enough for Issue
