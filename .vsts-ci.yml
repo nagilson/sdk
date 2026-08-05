@@ -18,6 +18,10 @@ pr:
 variables:
   - name: _CIBuild
     value: -restore -build -sign -pack -ci
+  # Signing is only supported on Windows: Arcade's Sign.proj strong-name signs with sn.exe,
+  # a Windows-only executable which fails with 'Exec format error' on Linux/macOS agents.
+  - name: _CIBuildNonWindows
+    value: -restore -build -pack -ci
   - ${{ if or(startswith(variables['Build.SourceBranch'], 'refs/heads/release/'), startswith(variables['Build.SourceBranch'], 'refs/heads/internal/release/'), eq(variables['Build.Reason'], 'Manual')) }}:
     - name: PostBuildSign
       value: false
