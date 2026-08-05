@@ -5,6 +5,7 @@ Documents Index
 
 - [Intro to .NET Core CLI](general/intro-to-cli.md)
 - [CLI UX Guidelines](general/cli-ux-guidelines.md)
+- [Getting Started with dotnetup](general/dotnetup/README.md)
 - [.NET Core native pre-requisities document](https://github.com/dotnet/core/blob/main/Documentation/prereqs.md)
 - [Roadmap and OS support](https://github.com/dotnet/core/blob/main/roadmap.md)
 - [Comprehensive CLI documentation](https://docs.microsoft.com/en-us/dotnet/articles/core/preview3/tools/)
