@@ -7,6 +7,7 @@ trigger: none
 # Run for all branches, only on paths that no-op other jobs
 pr:
   autoCancel: true
+  drafts: false
   branches:
     include:
     - '*'

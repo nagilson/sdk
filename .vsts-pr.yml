@@ -10,6 +10,7 @@ trigger:
     - main
 
 pr:
+  drafts: false
   branches:
     include:
     - main

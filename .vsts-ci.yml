@@ -24,6 +24,7 @@ schedules:
   always: true
 
 pr:
+  drafts: false
   branches:
     include:
     - main
