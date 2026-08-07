@@ -24,7 +24,7 @@ internal static class SdkInstallCommandParser
 
     public static readonly Option<bool?> SetDefaultInstallOption = new("--set-default-install")
     {
-        Description = "Set the install path as the default dotnet install.  This will update the PATH and DOTNET_ROOT environhment variables.",
+        Description = "Set the install path as the default dotnet install.  This will update the PATH and DOTNET_ROOT environment variables.",
         Arity = ArgumentArity.ZeroOrOne,
         DefaultValueFactory = r => null
     };
