@@ -201,7 +201,7 @@ The following arguments are needed for the installation script:
 
 | dotnet-install.sh arg (Linux, OSX) | dotnet-install.ps1 arg (Windows) | Defaults | Description |
 |------------------------------------|----------------------------------|-----------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| --channel | -Channel | "LTS" | Which channel (i.e. "LTS", "Current", "1.0", "2.0", etc) to install from. |
+| --channel | -Channel | "LTS" | Which channel (i.e. "LTS", "Current", "daily", "1.0", "2.0", "10.0-daily", etc) to install from. |
 | --version | -Version | Latest | Which version of CLI to install; you need to specify the version as 3-part version (i.e. 1.0.0-13232). The 'version' parameter supersedes the 'channel' parameter. |
 | --install-dir | -InstallDir | .dotnet | Path to where to install the CLI bundle. The directory is created if it doesn't exist. On Linux/OSX this directory is created in the user home directory (`$HOME`). On Windows, this directory is created in `%LocalAppData%`. |
 | --no-path | -NoPath | false | Do not export the installdir to the path for the current session. This makes CLI tools available immediately after install. |
@@ -256,6 +256,22 @@ Windows:
 OSX/Linux:
 ```
 ./dotnet-install.sh --channel 2.0
+```
+
+##### Install the latest CLI in the daily channel
+
+Windows:
+```
+./dotnet-install.ps1 -Channel daily
+```
+OSX/Linux:
+```
+./dotnet-install.sh --channel daily
+```
+
+Version-qualified daily channels are also supported:
+```
+./dotnet-install.sh --channel 10.0-daily
 ```
 
 #### Windows obtain one-liner example
