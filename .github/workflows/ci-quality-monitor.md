@@ -163,7 +163,7 @@ Apply the reasoning standards used by the `ci-analysis` skill, but do not claim 
 
 `mergedPullRequest` metadata links a final PR validation to a merge event, but the current collector does not compare the tested merge tree with the landed commit tree. Never describe that PR build as exact landed-content validation unless independent evidence establishes tree equivalence.
 
-This is a fork-only frozen replay. The dossier's `frozenReplay` identifies the scenario and source run. Create exactly one issue for the strongest `issueCandidates` mechanism even when production ownership, recurrence, or an existing historical issue would normally cause a no-op. Start the issue title with `[Replay ${{ inputs.scenario }} ${{ github.run_id }}]` so native title deduplication cannot suppress this evaluation. Start the body with `> Frozen CI monitor replay; not a production tracking issue.` Do not call `noop` unless the dossier has no issue candidate.
+This is a fork-only frozen replay. The dossier's `frozenReplay` identifies the scenario and source run. Create exactly one issue for the strongest `issueCandidates` mechanism even when production ownership, recurrence, or an existing historical issue would normally cause a no-op. Start the issue title with `[Replay ${{ inputs.scenario }} ${{ github.run_id }}]` so native title deduplication cannot suppress this evaluation. Start the body with `> Frozen CI monitor replay; not a production tracking issue.` Request the `Test Debt` label. Do not call `noop` unless the dossier has no issue candidate.
 
 ## Decision process
 
