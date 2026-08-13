@@ -563,6 +563,30 @@ test("applyKbeRecurrence ignores retries of the current commit", () => {
   assert.deepEqual(result[0].kbe.matchingBuilds, []);
 });
 
+test("applyKbeRecurrence ignores different commits from the same PR", () => {
+  const current = {
+    kind: "test", component: "Sdk.Tests.Flaky", mechanismFingerprint: "test-mechanism|shared|timeout",
+    kbe: { eligible: true, validation: { valid: true } }
+  };
+  const result = applyKbeRecurrence([current], [{
+    build: { id: 41, branch: "refs/pull/123/merge", commit: "older-commit" },
+    observations: [{ kind: "test", component: current.component, mechanismFingerprint: current.mechanismFingerprint }]
+  }], { id: 42, branch: "refs/pull/123/merge", commit: "newer-commit" });
+
+  assert.equal(result[0].kbe.recurring, false);
+  assert.deepEqual(result[0].kbe.matchingBuilds, []);
+});
+
+test("task logs without failure evidence remain non-actionable", () => {
+  const observations = createTaskObservations([{
+    type: "Task", name: "Queue Tests", issues: [], path: ["Build", "Queue Tests"], logId: 7
+  }], new Map([[7, "Determining projects to restore...\nAll projects are up-to-date for restore.\nSending Job..."]]));
+
+  assert.equal(observations[0].failureType, "unknown-error");
+  assert.equal(observations[0].actionable, false);
+  assert.deepEqual(observations[0].logExcerpt, []);
+});
+
 test("tracked issue fingerprints suppress candidates before agent activation", async () => {
   const fingerprint = "restore|build|nuget-503";
   const fetchImplementation = async (url, options) => {
