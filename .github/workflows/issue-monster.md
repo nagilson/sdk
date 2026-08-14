@@ -42,7 +42,6 @@ on:
             context,
             core,
             requestedIssueNumberInput: `${{ github.event.issue.number || github.event.inputs.issue_number || '' }}`,
-            requireLiveIncidentProvenance: ${{ github.event_name == 'issues' }},
           });
 
 
