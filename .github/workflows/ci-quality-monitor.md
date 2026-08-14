@@ -16,6 +16,7 @@ on:
         required: false
         type: string
   permissions: {}
+  needs: [collect]
 
 concurrency:
   group: ci-quality-monitor
@@ -176,6 +177,11 @@ jobs:
               createdIssueNumberInput: process.env.CREATED_ISSUE_NUMBER,
               ref: process.env.TARGET_REF,
             });
+  pre-activation:
+    outputs:
+      should_run: ${{ needs.collect.outputs.should_run }}
+  detection:
+    needs: [collect]
 
 if: needs.collect.outputs.should_run == 'true'
 
@@ -189,9 +195,9 @@ if: needs.collect.outputs.should_run == 'true'
 imports:
   - uses: shared/pat_pool.md
     with:
-      environment: copilot-pat-pool
+      environment: ${{ needs.pre_activation.outputs.should_run == 'true' && 'copilot-pat-pool' || '' }}
 
-environment: copilot-pat-pool
+environment: ${{ needs.collect.outputs.should_run == 'true' && 'copilot-pat-pool' || '' }}
 
 model: gpt-5.6-luna
 
@@ -228,6 +234,7 @@ tools:
     min-integrity: approved
 
 safe-outputs:
+  needs: [collect]
   threat-detection:
     engine:
       id: copilot
