@@ -37,7 +37,7 @@ The workflow supports four delivery paths:
 | Trigger | Behavior |
 | --- | --- |
 | Completed Azure check suite | Resolve the public SDK build and inspect a failed direct stable-branch build. |
-| Merged pull request | Locate the final public SDK validation and inspect it only when the PR merged into an allowlisted stable target after a failed validation. |
+| Merged pull request | Run from trusted base-repository context, locate the final public SDK validation, and inspect it only when the PR merged into an allowlisted stable target after a failed validation. Collector code comes from `main`; agent source inspection uses the target branch. |
 | Daily schedule | Reconcile missed stable-branch events and check registered branch heartbeats. |
 | Manual dispatch | Inspect the requested completed public build without consulting the automatic processed-build ledger. |
 

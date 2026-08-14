@@ -20,7 +20,9 @@ job runs before the agent:
    builds for each allowlisted pipeline and branch.
 3. During daily branch polling, exclude PR builds and builds already present in
   the ledger. Event paths separately verify direct stable-branch failures and
-  final PR validation associated with a merged PR.
+  final PR validation associated with a merged PR. Merged-PR delivery runs in
+  trusted base-repository context; collector code is always checked out from
+  `main`, while the sandboxed agent checks out the PR's allowlisted target branch.
 4. Collect bounded timeline, public Helix work-item, TRX, artifact, and log
   evidence for new failures. TRX evidence includes aggregate result counts;
   hang/crash evidence includes the active-test line, host exit code, watchdog

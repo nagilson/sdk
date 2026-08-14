@@ -285,6 +285,33 @@ test("merged stable-target PR failures promote the same Azure attempt once", asy
   assert.ok(requestedUrls.some(url => url.includes("branchName=refs%2Fpull%2F124%2Fmerge")));
 });
 
+test("merged PR failures targeting branches outside stableBranches are ignored", async () => {
+  const build = {
+    id: 44, result: "failed", reason: "pullRequest", sourceBranch: "refs/pull/124/merge",
+    sourceVersion: "head-sha", finishTime: "2026-07-24T14:00:00Z",
+    definition: { id: 101 }, repository: { id: "dotnet/sdk" },
+    triggerInfo: { "pr.sourceSha": "head-sha", "pr.number": "124" }
+  };
+  const fetchImplementation = async url => {
+    if (url.includes("builds/44?")) return new Response(JSON.stringify(build), { status: 200 });
+    if (url.includes("builds?") && url.includes("branchName=refs%2Fpull%2F124%2Fmerge")) {
+      return new Response(JSON.stringify({ value: [build] }), { status: 200 });
+    }
+    throw new Error(`Unexpected URL ${url}`);
+  };
+  const registry = { pipelines: [{
+    organization: "dnceng-public", project: "public", definitionId: 101, repository: "dotnet/sdk",
+    branches: ["refs/heads/main"], stableBranches: ["refs/heads/main"]
+  }] };
+
+  const dossier = await collectCiEvidence(
+    registry, null, { schemaVersion: 1, pipelines: {} }, fetchImplementation, null, "head-sha",
+    { number: 124, baseRef: "release/unmonitored", mergeCommitSha: "landed-sha" });
+
+  assert.equal(dossier.failures.length, 0);
+  assert.equal(shouldRunAgent(dossier), false);
+});
+
 test("merged PR audits require a landed commit identity", async () => {
   const build = {
     id: 44, result: "failed", reason: "pullRequest", sourceBranch: "refs/pull/124/merge",
