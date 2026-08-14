@@ -13,6 +13,7 @@ function createIssue(number, overrides = {})
         created_at: "2026-08-01T00:00:00Z",
         labels: [{name: "cookie"}, {name: "bug"}],
         assignees: [],
+        user: {login: "contributor"},
         ...overrides,
     };
 }
@@ -102,7 +103,7 @@ function createGithub({candidates = [], issues = {}, details = {}, recentPRs = [
     return {github, calls};
 }
 
-async function runScenario(options = {}, requestedIssueNumberInput = "")
+async function runScenario(options = {}, requestedIssueNumberInput = "", requireLiveIncidentProvenance = false)
 {
     const core = createCore();
     const {github, calls} = createGithub(options);
@@ -112,6 +113,7 @@ async function runScenario(options = {}, requestedIssueNumberInput = "")
         context: {repo: {owner: "dotnet", repo: "sdk"}},
         core,
         requestedIssueNumberInput,
+        requireLiveIncidentProvenance,
     });
 
     return {core, calls};
@@ -244,12 +246,38 @@ test("manual requests require the work queue label", async () =>
     assert.deepEqual(calls, ["recent-pr-search", "issue-get:123"]);
 });
 
-test("requested live incidents bypass the candidate search", async () =>
+test("requested live incidents still require the work queue label", async () =>
+{
+    const requestedIssue = createIssue(123, {
+        labels: [{name: "live-build-incident"}],
+        user: {login: "github-actions[bot]"},
+    });
+    const {core, calls} = await runScenario({issues: {123: requestedIssue}}, "123", true);
+
+    assert.equal(core.outputs.issue_count, 0);
+    assert.equal(core.outputs.has_issues, "false");
+    assert.deepEqual(calls, ["recent-pr-search", "issue-get:123"]);
+});
+
+test("requested live incidents require the GitHub Actions author", async () =>
 {
     const requestedIssue = createIssue(123, {
         labels: [{name: "cookie"}, {name: "live-build-incident"}],
     });
-    const {core, calls} = await runScenario({issues: {123: requestedIssue}}, "123");
+    const {core, calls} = await runScenario({issues: {123: requestedIssue}}, "123", true);
+
+    assert.equal(core.outputs.issue_count, 0);
+    assert.equal(core.outputs.has_issues, "false");
+    assert.deepEqual(calls, ["recent-pr-search", "issue-get:123"]);
+});
+
+test("trusted live incidents bypass the candidate search", async () =>
+{
+    const requestedIssue = createIssue(123, {
+        labels: [{name: "cookie"}, {name: "live-build-incident"}],
+        user: {login: "github-actions[bot]"},
+    });
+    const {core, calls} = await runScenario({issues: {123: requestedIssue}}, "123", true);
 
     assert.equal(core.outputs.issue_numbers, "123");
     assert.deepEqual(calls, [

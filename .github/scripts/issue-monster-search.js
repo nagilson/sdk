@@ -8,7 +8,9 @@ const TOP_CANDIDATE_LOG_COUNT = 10;
 
 // Issue and assignee identifiers
 const WORK_QUEUE_LABEL = "cookie";
+const LIVE_BUILD_INCIDENT_LABEL = "live-build-incident";
 const OPEN_ISSUE_STATE = "open";
+const GITHUB_ACTIONS_BOT_LOGIN = "github-actions[bot]";
 const COPILOT_LOGIN_FRAGMENT = "copilot";
 const COPILOT_ASSIGNEE_LOGIN = `${COPILOT_LOGIN_FRAGMENT}-swe-agent`;
 const COPILOT_PR_AUTHOR = `app/${COPILOT_ASSIGNEE_LOGIN}`;
@@ -340,9 +342,16 @@ function parseRequestedIssueNumber(requestedIssueNumberInput)
     return requestedInput ? Number(requestedInput) : null;
 }
 
-async function loadRequestedIssue({github, core, owner, repo, requestedIssueNumber})
+async function loadRequestedIssue({
+    github,
+    core,
+    owner,
+    repo,
+    requestedIssueNumber,
+    requireLiveIncidentProvenance,
+})
 {
-    core.info(`Loading manually requested issue #${requestedIssueNumber}`);
+    core.info(`Loading requested issue #${requestedIssueNumber}`);
     const response = await github.rest.issues.get({
         owner,
         repo,
@@ -355,10 +364,13 @@ async function loadRequestedIssue({github, core, owner, repo, requestedIssueNumb
         issue.state === OPEN_ISSUE_STATE &&
         issueLabels.has(WORK_QUEUE_LABEL) &&
         !hasExcludedLabel(issueLabels);
+    const hasRequiredProvenance =
+        !requireLiveIncidentProvenance ||
+        (issueLabels.has(LIVE_BUILD_INCIDENT_LABEL) && issue.user?.login === GITHUB_ACTIONS_BOT_LOGIN);
 
-    if (!meetsBasicCriteria)
+    if (!meetsBasicCriteria || !hasRequiredProvenance)
     {
-        core.info(`Skipping manually requested issue #${requestedIssueNumber}: it does not meet the criteria`);
+        core.info(`Skipping requested issue #${requestedIssueNumber}: it does not meet the criteria`);
         return [];
     }
     return [issue];
@@ -473,6 +485,7 @@ module.exports = async function searchIssueMonsterCandidates({
     context,
     core,
     requestedIssueNumberInput,
+    requireLiveIncidentProvenance = false,
 })
 {
     const {owner, repo} = context.repo;
@@ -487,7 +500,14 @@ module.exports = async function searchIssueMonsterCandidates({
             return;
         }
 
-        const candidateIssues = await findCandidateIssues({github, core, owner, repo, requestedIssueNumber});
+        const candidateIssues = await findCandidateIssues({
+            github,
+            core,
+            owner,
+            repo,
+            requestedIssueNumber,
+            requireLiveIncidentProvenance,
+        });
         const detailedIssues = await fetchCandidateDetails({github, core, owner, repo, candidateIssues});
         const outputs = createCandidateOutputs(scoreIssues(core, detailedIssues));
         logCandidateSummary(core, outputs);
