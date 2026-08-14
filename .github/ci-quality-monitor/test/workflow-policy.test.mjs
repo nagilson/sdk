@@ -4,6 +4,20 @@ import test from "node:test";
 
 const workflowUrl = new URL("../../workflows/ci-quality-monitor.md", import.meta.url);
 
+test("no-op runs avoid PAT environment activation without changing the PR trigger", async () =>
+{
+    const workflow = await readFile(workflowUrl, "utf8");
+
+    assert.match(workflow, /pull_request:\s*\n\s*types: \[closed\]/);
+    assert.doesNotMatch(workflow, /pull_request_target:/);
+    assert.match(workflow, /permissions: \{\}\s*\n\s*needs: \[collect\]/);
+    assert.match(workflow, /pre-activation:\s*\n\s*outputs:\s*\n\s*should_run: \$\{\{ needs\.collect\.outputs\.should_run \}\}/);
+    assert.match(workflow, /detection:\s*\n\s*needs: \[collect\]/);
+    assert.match(workflow, /environment: \$\{\{ needs\.collect\.outputs\.should_run == 'true' && 'copilot-pat-pool' \|\| '' \}\}/);
+    assert.match(workflow, /environment: \$\{\{ needs\.pre_activation\.outputs\.should_run == 'true' && 'copilot-pat-pool' \|\| '' \}\}/);
+    assert.match(workflow, /safe-outputs:\s*\n\s*needs: \[collect\]/);
+});
+
 test("every created issue receives live-build-incident", async () =>
 {
     const workflow = await readFile(workflowUrl, "utf8");
