@@ -149,6 +149,33 @@ jobs:
         with:
           path: .ci-quality-monitor/state.json
           key: ci-quality-monitor-state-${{ github.run_id }}
+  conclusion:
+    permissions:
+      actions: write
+      issues: write
+    pre-steps:
+      - name: Check out monitor dispatch helper
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Dispatch Issue Monster for created issues
+        if: needs.safe_outputs.outputs.created_issue_number != ''
+        uses: actions/github-script@v9.0.0
+        env:
+          CREATED_ISSUE_NUMBER: ${{ needs.safe_outputs.outputs.created_issue_number }}
+          CREATED_ISSUE_MAP: ${{ needs.safe_outputs.outputs.process_safe_outputs_temporary_id_map }}
+          TARGET_REF: ${{ github.ref_name }}
+        with:
+          script: |
+            const { dispatchCreatedIssues } = require("./.github/ci-quality-monitor/issue-monster-dispatch.js");
+            await dispatchCreatedIssues({
+              github,
+              context,
+              core,
+              temporaryIdMapInput: process.env.CREATED_ISSUE_MAP,
+              createdIssueNumberInput: process.env.CREATED_ISSUE_NUMBER,
+              ref: process.env.TARGET_REF,
+            });
 
 if: needs.collect.outputs.should_run == 'true'
 
