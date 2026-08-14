@@ -6,7 +6,7 @@ description: Investigates public dotnet/sdk CI failures and identifies actionabl
 on:
   check_suite:
     types: [completed]
-  pull_request:
+  pull_request_target:
     types: [closed]
   schedule: daily
   workflow_dispatch:
@@ -16,6 +16,7 @@ on:
         required: false
         type: string
   permissions: {}
+  needs: [collect]
 
 concurrency:
   group: ci-quality-monitor
@@ -27,11 +28,11 @@ env:
 jobs:
   collect:
     if: >-
-      (github.event_name != 'check_suite' && github.event_name != 'pull_request') ||
+      (github.event_name != 'check_suite' && github.event_name != 'pull_request_target') ||
       (github.event_name == 'check_suite' &&
        github.event.check_suite.app.slug == 'azure-pipelines' &&
        github.event.check_suite.conclusion != 'success') ||
-      (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
+      (github.event_name == 'pull_request_target' && github.event.pull_request.merged == true)
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -45,6 +46,8 @@ jobs:
     steps:
       - name: Check out monitor configuration
         uses: actions/checkout@v7.0.1
+        with:
+          ref: main
       - name: Resolve Azure build from completed check suite
         if: github.event_name == 'check_suite'
         id: resolve-check-suite
@@ -176,7 +179,6 @@ jobs:
               createdIssueNumberInput: process.env.CREATED_ISSUE_NUMBER,
               ref: process.env.TARGET_REF,
             });
-
 if: needs.collect.outputs.should_run == 'true'
 
 # ###############################################################
@@ -192,6 +194,10 @@ imports:
       environment: copilot-pat-pool
 
 environment: copilot-pat-pool
+
+checkout:
+  repository: ${{ github.repository }}
+  ref: ${{ github.event.pull_request.base.ref }}
 
 model: gpt-5.6-luna
 

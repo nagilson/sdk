@@ -57,11 +57,14 @@ test("failed Azure check suites trigger build ID resolution", async () =>
     assert.match(workflow, /resolveAzureBuildId\(checks\)/);
 });
 
-test("merged pull requests pass stable-target metadata to the collector", async () =>
+test("merged pull requests run from trusted main and pass stable-target metadata", async () =>
 {
     const workflow = await readFile(workflowUrl, "utf8");
 
-    assert.match(workflow, /pull_request:\s*\n\s*types: \[closed\]/);
+    assert.match(workflow, /pull_request_target:\s*\n\s*types: \[closed\]/);
+    assert.match(workflow, /permissions: \{\}\s*\n\s*needs: \[collect\]/);
+    assert.match(workflow, /name: Check out monitor configuration[\s\S]*ref: main/);
+    assert.match(workflow, /checkout:[\s\S]*ref: \$\{\{ github\.event\.pull_request\.base\.ref \}\}/);
     assert.match(workflow, /github\.event\.pull_request\.merged == true/);
     assert.match(workflow, /MERGED_PR_NUMBER: \$\{\{ github\.event\.pull_request\.number \}\}/);
     assert.match(workflow, /MERGED_PR_BASE_REF: \$\{\{ github\.event\.pull_request\.base\.ref \}\}/);
