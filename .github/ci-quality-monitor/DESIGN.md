@@ -89,6 +89,25 @@ Fingerprints are generated from normalized phase, failure type, component, and
 mechanism. Normalization removes volatile identifiers, timestamps, and
 machine-specific paths. Evidence source order is not part of identity.
 
+Hang watchdog events are recognized in raw console text before path normalization:
+a preceding command, PID, or unterminated path must not become part of the
+hang identity. A versioned `failureFamilyFingerprint` groups this observed symptom
+for comparison, not a proven common cause. Active tests, queues, and distinct
+work-item occurrences remain in the evidence. Non-hang identities retain their
+existing normalization.
+
+The collector scans full console text for diagnostic events and retains bounded
+context windows and the tail rather than only the last 16,000 characters.
+Evidence carries raw sizes, event counts, retained ranges, omission counts, and
+artifact URLs. The recovered TRX may contain no completed failures when the
+active test never completed; dump availability is not dump analysis. Expected
+negative-test command failures remain context, not inferred failed assertions.
+The full collected dossier is uploaded as `ci-quality-evidence`. A separate
+bounded agent projection avoids duplicating raw excerpts across test observations;
+it retains diagnostic identity, recurrence, artifact locations, and explicit
+omission metadata. If required evidence cannot fit, inference must not proceed
+with silently missing candidates.
+
 Named tests retain both a per-test fingerprint and a mechanism fingerprint.
 Known Build Error recurrence requires the same test and mechanism on an
 independent build. Retries of one commit or attempts of the same PR do not
@@ -101,9 +120,10 @@ audit context. Finish time and result distinguish an updated Azure retry that
 reuses a build ID. Stable direct-build and merged-PR contexts are distinct so a
 failed validation can be reconsidered after its content is integrated.
 
-State restoration uses a branch-scoped Actions cache first and a durable
-workflow artifact checkpoint second. The collector uploads the updated state
-before agent activation. If inference or issue application later fails, a
+State restoration uses the newest `ci-quality-state-v2` artifact for the same
+workflow and execution branch, never a potentially stale read-only cache.
+Discovery/download failures stop collection rather than resetting state.
+The collector uploads the updated state before agent activation. If inference or issue application later fails, a
 scheduled run does not automatically spend tokens on the same processing key
 again. Manual dispatch intentionally bypasses this ledger.
 
@@ -120,3 +140,29 @@ heartbeat-polled.
 
 Internal or authenticated CI is outside this workflow's data boundary until an
 explicit credential and evidence design is added.
+
+## Admission And Validation
+
+[`admission.mjs`](admission.mjs) reserves at most ten AI-bearing dossiers per UTC
+day before inference, including manual AI dispatches. The workflow serializes
+collectors; its checkpoint must upload successfully before AI can run. Reservations
+are never refunded. A persistent run-ID high-water mark rejects reruns and stale,
+out-of-order run IDs. Corrupt accounting fails closed. Missing/old-format admission
+state initializes closed for the entire current UTC day, then recovers on rollover;
+it never treats missing accounting as zero spend.
+
+The automatic workflow executes from the default branch, sharing one admission
+ledger. Explicit maintainer dispatches on other branches have isolated checkpoints
+for validation, not a repository-wide billing guarantee. Native workflow creation
+and checkpoint lookups still occur after a trigger. Evidence collection is capped
+at ten minutes and three selected builds per scheduled invocation. When admission
+is exhausted, collection is deferred without marking those builds processed.
+
+The source workflow also caps the investigator at 25 AI credits and threat
+detection at five, with a secondary rolling-24-hour guardrail of 300. These are
+request/accounting safeguards, not an exact invoice prediction; provider billing
+and requests already in flight can differ.
+
+Manual `evidence_only: true` dispatches collect and upload the dossier without AI,
+issue writes, or state changes. Use these on a fork and selected source ref to
+validate real historical builds. They do not bypass limits to run inference.

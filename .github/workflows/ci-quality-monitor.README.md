@@ -87,14 +87,19 @@ It must:
 7. Keep internal or official CI outside scope until an authenticated internal
 	evidence path is deliberately designed.
 
-The current implementation milestone is **HIGH priority only**. MED and LOW are
-specified below for future expansion and to clarify design intent.
+Current implementation covers HIGH stable-branch incidents and independently
+recurring failures across PRs targeting explicitly enabled stable branches.
+The MED/LOW author-specific policies below remain planned; they are not the
+implemented generic `pull-request` scope. Current bounds, evidence handling,
+admission limits, and validation procedures are defined in the
+[collector design](../ci-quality-monitor/DESIGN.md).
 
 ## Monitoring Scope
 
 | Scope | Included builds | Interpretation | Implementation status |
 | --- | --- | --- | --- |
 | Stable branch | Failed direct builds on allowlisted stable branches; a failed final PR validation linked by a merged-PR event to an allowlisted stable target | Content is integrated, or a failed validation was nevertheless followed by integration. Treat actionable mechanisms as live incidents. A merge event alone is not a failure. | **Current milestone** |
+| Pull-request target | Completed PR failures whose validated build-time target is in `pullRequestTargets` and `stableBranches` | Require matching evidence from another PR or independent direct target commit before AI; symptom families do not prove a common root cause. | **Implemented** |
 | Infrastructure PR | Automated integration PRs. Start with verified Maestro codeflow PRs only. Branding and interbranch merge PRs are later extensions. | A failure can be flow infrastructure, a flake, or a valid incompatibility in incoming changes. It is not equivalent to a stable-branch incident. | Planned |
 | Developer PR | Completed, non-draft PR builds not classified as infrastructure PRs | The PR itself is a plausible cause. Do not infer a flake from repeated attempts of that PR. | Planned |
 
@@ -127,9 +132,9 @@ as unknown unless another evidence source establishes it.
 
 | Trigger | Candidate monitoring scopes | Policy |
 | --- | --- | --- |
-| Azure `check_suite: completed` | Stable branch; infrastructure PR | For a non-success `azure-pipelines` suite, resolve and verify the definition `101` build. A direct allowlisted stable-branch failure is HIGH. Planned MED support may accept verified codeflow PR failures. Ordinary open PR failures do not file in the HIGH-only milestone. |
+| Azure `check_suite: completed` | Stable branch; pull-request target | For a non-success `azure-pipelines` suite, resolve and verify the definition `101` build. Direct stable failures are HIGH. Configured PR targets require independent recurrence before AI. |
 | `pull_request: closed` with `merged == true` | Stable branch; infrastructure PR lifecycle | A merge is an evidence and lifecycle event, not a failure by itself. Link the PR to its final Azure validation. If that final validation failed and the target is allowlisted as stable, create a HIGH candidate. A successful PR build creates no incident. The current collector does not compare tested and landed trees, so it cannot claim exact landed-content validation. |
-| Daily routine | Stable branch; planned developer PR | Reconcile missed stable-branch check-suite events and poll only branches verified to have direct public branch CI. Detect a branch head for which Azure created no build record after two daily polls. The planned LOW extension will use this same run to select at most three newest unprocessed, completed, non-draft failures from distinct PRs and apply the independent-recurrence policy before AI may file anything. |
+| Daily routine | Stable branch; pull-request target | Reconcile missed events within the bounded history window, selecting at most three builds per run. PR scopes bootstrap without historical replay. Heartbeats apply only to branches with verified direct CI. |
 | Manual dispatch with `build_id` | Diagnostic only | Accept any completed registered public build for repeatable investigation and bypass automatic processing state. The manual path follows normal ownership and recurrence rules, does not assign a production monitoring scope or priority, and therefore cannot promote a build to HIGH. |
 
 ## Audit Processing and Promotion
@@ -144,6 +149,7 @@ context:
 | Audit context | Context identity | Re-audit rule |
 | --- | --- | --- |
 | Direct stable branch | `stable-direct:<full branch ref>` | Audit once at HIGH for that Azure attempt. Event and daily reconciliation share this key. |
+| Pull-request target | `pr-target:<full target ref>` | Audit the Azure attempt under `pull-request` scope; independent recurrence gates AI. |
 | Infrastructure PR | `infra-pr:<PR number>` | Audit once at MED while the PR is open. Repeated delivery and repeated analysis of the same Azure attempt are suppressed. |
 | Developer PR | `developer-pr:<PR number>` | Audit once at LOW after the daily sampler and independent-recurrence gate select it. |
 | Merged into stable branch | `stable-merge:<PR number>:<landed commit SHA>` | Permit one HIGH audit even if the same Azure attempt was already processed under an infrastructure-PR or developer-PR context. Redelivery of the same merge event is suppressed. |
@@ -153,8 +159,8 @@ from the earlier attempt. Context identity distinguishes a meaningful priority
 promotion from duplicate delivery of the same evidence.
 
 Before AI runs, the collector records the audit key in its pipeline state. State
-is restored first from the newest Actions cache and, if that is unavailable,
-from the newest non-expired `ci-quality-state` artifact for the workflow branch.
+is restored from the newest non-expired `ci-quality-state-v2` artifact for the
+same workflow and execution branch, not an older read-only cache.
 The updated checkpoint is uploaded before agent activation. An inference or
 issue-output failure therefore does not cause the next automatic delivery to
 spend AI on the same audit context again.
@@ -279,11 +285,12 @@ surfaced. The current collector emits the following values:
 - A stable branch may be recognized as a stable merge target without having
   direct branch CI. Such a branch must not be heartbeat-polled until direct CI
   is verified.
-- HIGH is the only production filing policy in the current milestone.
+- HIGH and the generic independently recurring PR-target policy are implemented.
 - Infrastructure PR MED support starts with Maestro codeflow only. Branding,
   automated interbranch merge, backport, and other bot PR policies require
   separate enrollment decisions.
 - Developer PR LOW support requires independent recurrence data and bounded
   daily sampling before it can be enabled.
 - Manual investigation bypasses automatic processing state but assigns no
-  production monitoring scope or priority.
+  production monitoring scope or priority. AI still requires durable daily
+  admission. `evidence_only` dispatches perform no AI, issue writes, or state changes.

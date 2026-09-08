@@ -14,8 +14,8 @@ The source workflow is
 [`ci-quality-monitor.md`](../workflows/ci-quality-monitor.md). A deterministic
 job runs before the agent:
 
-1. Restore the processed-build ledger from the newest matching GitHub Actions
-   cache entry.
+1. Restore the processed-build/admission ledger from the newest matching durable
+   workflow artifact; stale caches are not used.
 2. Read [`pipelines.json`](pipelines.json). For enabled `pullRequestTargets`,
    query bounded, paginated history across PRs and direct builds of the target;
    other branch histories use the latest 20 completed builds.
@@ -27,8 +27,8 @@ job runs before the agent:
   evidence for new failures. TRX evidence includes aggregate result counts;
   hang/crash evidence includes the active-test line, host exit code, watchdog
   sequence, and dump-capture failures when present.
-5. Save the updated ledger under a run-specific immutable cache key and a
-  branch-scoped durable artifact checkpoint.
+5. Reserve daily AI admission when needed and upload the updated durable
+  checkpoint before allowing AI.
 6. Skip the agent when there are no selected failed builds or actionable
   pipeline-health observations.
 7. Give the agent a structured dossier when investigation is required.
@@ -159,14 +159,11 @@ and result, so a retried attempt that updates an existing build ID can be
 analyzed again. Every daily poll re-reads the latest 20 builds to tolerate builds
 finishing out of queue order.
 
-The collector restores state through two layers before deciding whether to run
-AI:
-
-1. A branch-scoped Actions cache is the fast path. Immutable run-specific keys
-  restore the most recent prefix match.
-2. If the cache is missing or evicted, the collector restores the newest
-  non-expired `ci-quality-state` artifact from the same branch. Checkpoints are
-  retained for 30 days.
+The collector restores the newest non-expired `ci-quality-state-v2` artifact from
+the same workflow and execution branch. Checkpoints are retained for 30 days.
+The artifact is authoritative even if a cache from an older run still exists.
+Failed discovery/download stops the run; missing admission state initializes
+closed for the current UTC day.
 
 The new checkpoint is uploaded by the collector job before agent activation.
 This gives scheduled runs **at-most-once automatic AI delivery** per processing
@@ -175,14 +172,13 @@ scheduled run does not automatically spend tokens on the same completed build.
 Use manual dispatch with `build_id` for an intentional retry; manual collection
 bypasses the processed-build ledger.
 
-When no state can be restored, the run is marked as bootstrap. Bootstrap records
-the current window and gathers at most one historical failure, but the
-deterministic collector emits `should_run=false`, so no agent job is created.
-This prevents a lost cache and artifact checkpoint from spending AI credits or
-creating a burst of historical issues.
+When no admission state can be restored, no AI runs on the bootstrap UTC day.
+New polling scopes also baseline their current window without replaying historical
+failures. See [admission and validation](DESIGN.md#admission-and-validation) for
+daily reservations, execution caps, and evidence-only dispatches.
 
-The checkpoint contains no credentials or untrusted executable content. It is
-JSON build metadata only. Workflow concurrency queues scheduled runs under one
+The checkpoint contains no credentials or executable content. It is JSON build
+metadata and admission accounting. Workflow concurrency queues runs under one
 group, preventing two collectors from claiming the same newly completed build
 at once.
 
@@ -266,3 +262,9 @@ Compile the agentic workflow after any source change:
 ```
 
 The generated `.lock.yml` must be committed with its source workflow.
+
+For safe fork validation, dispatch `ci-quality-monitor.lock.yml` on the changed
+ref with a selected `build_id` and `evidence_only=true`. Inspect the
+`ci-quality-evidence` artifact and confirm that the agent was skipped. Full
+console logs and dumps remain linked even when only bounded excerpts enter the
+agent context; omission metadata must be considered before asserting absence.
