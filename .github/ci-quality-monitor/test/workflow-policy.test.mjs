@@ -69,3 +69,17 @@ test("merged pull requests pass stable-target metadata to the collector", async 
     assert.match(workflow, /MERGED_PR_BASE_REF: \$\{\{ github\.event\.pull_request\.base\.ref \}\}/);
     assert.match(workflow, /MERGED_PR_COMMIT_SHA: \$\{\{ github\.event\.pull_request\.merge_commit_sha \}\}/);
 });
+
+test("AI admission is durable, bounded, and bypassed only for read-only evidence collection", async () =>
+{
+    const workflow = await readFile(workflowUrl, "utf8");
+    assert.match(workflow, /--admission-run-id "\$GITHUB_RUN_ID"/);
+    assert.match(workflow, /--evidence-only "\$EVIDENCE_ONLY"/);
+    assert.match(workflow, /name: ci-quality-evidence/);
+    assert.match(workflow, /name: ci-quality-state-v2/);
+    assert.doesNotMatch(workflow, /actions\/cache\/(?:restore|save)/);
+    assert.match(workflow, /findStateCheckpoint\(\{github, context\}\)/);
+    assert.match(workflow, /max-ai-credits: 25/);
+    assert.match(workflow, /max-daily-ai-credits: 300/);
+    assert.match(workflow, /threat-detection:\s+max-ai-credits: 5/);
+});

@@ -4,6 +4,8 @@ import process from "node:process";
 import {pathToFileURL} from "node:url";
 import {collectCiEvidence} from "./collector.mjs";
 import {getRecentlyTrackedFingerprints, suppressTrackedIssueCandidates} from "./issue-deduplication.mjs";
+import {initializeAdmission, reserveAdmission} from "./admission.mjs";
+import {prepareAgentDossier} from "./prompt-evidence.mjs";
 
 export
 {
@@ -80,18 +82,20 @@ async function readState(statePath)
 
 export function shouldRunAgent(dossier)
 {
-    if (dossier.bootstrap) return false;
+    if (dossier.bootstrap || dossier.evidenceOnly || (dossier.admission && !dossier.admission.allowed)) return false;
     const actionableHealth = dossier.pipelineHealth.filter(observation => observation.actionable).length;
     const issueCandidates = dossier.failures.reduce(
         (count, failure) => count + (failure.issueCandidates?.length ?? 0), 0);
     return issueCandidates + actionableHealth > 0;
 }
 
-async function writeGitHubOutputs(outputPath, dossier)
+async function writeGitHubOutputs(outputPath, dossier, fullEvidencePath)
 {
     if (!outputPath) return;
     const delimiter = `CI_QUALITY_${Date.now()}`;
-    const compactDossier = JSON.stringify(dossier);
+    const projected = prepareAgentDossier(dossier, {fullEvidenceArtifact: "ci-quality-evidence/dossier.json"});
+    const compactDossier = JSON.stringify(projected);
+    await writeFile(path.join(path.dirname(fullEvidencePath), "agent-dossier.json"), `${compactDossier}\n`);
     const actionableHealth = dossier.pipelineHealth.filter(observation => observation.actionable).length;
     await appendFile(outputPath, `should_run=${shouldRunAgent(dossier)}\n`);
     await appendFile(outputPath, `failure_count=${dossier.failures.length + actionableHealth}\n`);
@@ -102,8 +106,26 @@ async function main()
 {
     const options = parseArguments(process.argv.slice(2));
     const registry = JSON.parse(await readFile(options.registry, "utf8"));
-    const state = await readState(options.state);
-    const dossier = await collectCiEvidence(
+    let state = await readState(options.state);
+    const evidenceOnly = options["evidence-only"] === "true";
+    if (Object.hasOwn(options, "evidence-only") && !["true", "false"].includes(options["evidence-only"]))
+    {
+        throw new Error("--evidence-only must be true or false.");
+    }
+    let admission;
+    if (Object.hasOwn(options, "admission-run-id") && !evidenceOnly)
+    {
+        if (!options.state || !options["state-output"]) throw new Error("Admission requires durable input and output state.");
+        const now = new Date();
+        admission = Object.hasOwn(state, "admission")
+            ? reserveAdmission(state, {runId: options["admission-run-id"], now})
+            : initializeAdmission(state, {now});
+        if (!admission.allowed) state = admission.state;
+    }
+    const dossier = admission && !admission.allowed
+        ? {schemaVersion: 1, generatedAt: new Date().toISOString(), bootstrap: false,
+            pipelineHealth: [], failures: []}
+        : await collectCiEvidence(
         registry,
         options["build-id"],
         state,
@@ -118,15 +140,25 @@ async function main()
     const trackedFingerprints = await getRecentlyTrackedFingerprints(
         options["github-repository"], options["github-token"]);
     suppressTrackedIssueCandidates(dossier, trackedFingerprints);
+    if (admission)
+    {
+        if (admission.allowed && shouldRunAgent(dossier)) state.admission = admission.state.admission;
+        dossier.admission = {allowed: admission.allowed, reason: admission.reason, remaining: admission.remaining};
+    }
+    dossier.evidenceOnly = evidenceOnly;
     await mkdir(path.dirname(options.output), {recursive: true});
     await writeFile(options.output, `${JSON.stringify(dossier, null, 2)}\n`);
-    if (options["state-output"])
+    if (options["state-output"] && !evidenceOnly)
     {
         await mkdir(path.dirname(options["state-output"]), {recursive: true});
         await writeFile(options["state-output"], `${JSON.stringify(state, null, 2)}\n`);
     }
-    await writeGitHubOutputs(options["github-output"], dossier);
+    await writeGitHubOutputs(options["github-output"], dossier, options.output);
     console.log(`Collected ${dossier.failures.length} failed build dossier(s) in ${options.output}.`);
+    for (const note of dossier.selectionNotes ?? []) console.log(note);
+    console.log(`Agent activation: ${shouldRunAgent(dossier)}; ${evidenceOnly ? "evidence-only"
+        : admission?.reason ?? "local collection"}; actionable observations: ${
+        dossier.failures.reduce((count, failure) => count + failure.issueCandidates.length, 0)}.`);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href)
