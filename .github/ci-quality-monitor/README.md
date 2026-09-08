@@ -162,8 +162,8 @@ finishing out of queue order.
 The collector restores the newest non-expired `ci-quality-state-v2` artifact from
 the same workflow and execution branch. Checkpoints are retained for 30 days.
 The artifact is authoritative even if a cache from an older run still exists.
-Failed discovery/download stops the run; missing admission state initializes
-closed for the current UTC day.
+Failed discovery/download stops the run. Successful discovery with no admission
+ledger initializes accounting and admits the first eligible investigation immediately.
 
 The new checkpoint is uploaded by the collector job before agent activation.
 This gives scheduled runs **at-most-once automatic AI delivery** per processing
@@ -172,8 +172,8 @@ scheduled run does not automatically spend tokens on the same completed build.
 Use manual dispatch with `build_id` for an intentional retry; manual collection
 bypasses the processed-build ledger.
 
-When no admission state can be restored, no AI runs on the bootstrap UTC day.
-New polling scopes also baseline their current window without replaying historical
+Admission initialization never waits for the next UTC day. New polling scopes
+still baseline their current window without replaying historical
 failures. See [admission and validation](DESIGN.md#admission-and-validation) for
 daily reservations, execution caps, and evidence-only dispatches.
 
@@ -268,3 +268,8 @@ ref with a selected `build_id` and `evidence_only=true`. Inspect the
 `ci-quality-evidence` artifact and confirm that the agent was skipped. Full
 console logs and dumps remain linked even when only bounded excerpts enter the
 agent context; omission metadata must be considered before asserting absence.
+
+To validate AI itself, dispatch with `evidence_only=false`. Fork issue writes are
+staged previews and do not dispatch Issue Monster. Check that activation, agent,
+detection, and safe outputs execute; a successful collector alone does not prove
+the AI path works. Production `dotnet/sdk` runs create real issues.

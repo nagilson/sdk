@@ -69,9 +69,8 @@ function blocked(state, reason, remaining = 0)
 }
 
 /**
- * Explicitly migrate a schema-1 state with no admission ledger. Missing history
- * cannot prove today's spend, so the entire bootstrap UTC day is closed. Persist
- * the returned state even though allowed is false; tomorrow can then roll over.
+ * Initialize accounting after successful checkpoint discovery found no ledger.
+ * Initialization does not reserve an execution; the caller must reserve before AI.
  * Never reset an existing ledger, including a corrupt one.
  */
 export function initializeAdmission(state, {now} = {})
@@ -85,8 +84,8 @@ export function initializeAdmission(state, {now} = {})
     }
     return blocked({
         ...state,
-        admission: {day, bootstrap: true, count: 0, runIds: [], highWaterRunId: "0"}
-    }, "bootstrap");
+        admission: {day, bootstrap: false, count: 0, runIds: [], highWaterRunId: "0"}
+    }, "initialized");
 }
 
 /**
@@ -103,7 +102,7 @@ export function initializeAdmission(state, {now} = {})
  * water mark survives, rejecting both reruns and older out-of-order workflow IDs.
  * GitHub run IDs are used in allocation order; an older run arriving late is
  * conservatively denied rather than admitted without bounded replay protection.
- * Losing all history requires explicit bootstrap initialization, not a reset.
+ * Checkpoint discovery/download failures must not be treated as first-time initialization.
  */
 export function reserveAdmission(state, {runId, now, maxRunsPerDay = DEFAULT_MAX_RUNS_PER_DAY} = {})
 {
@@ -130,7 +129,12 @@ export function reserveAdmission(state, {runId, now, maxRunsPerDay = DEFAULT_MAX
         ledger = {day, bootstrap: false, count: 0, runIds: [], highWaterRunId: ledger.highWaterRunId};
         state = {...state, admission: ledger};
     }
-    if (ledger.bootstrap) return blocked(state, "bootstrap");
+    // The previous version persisted zero-spend bootstrap ledgers that waited for midnight.
+    if (ledger.bootstrap)
+    {
+        ledger = {...ledger, bootstrap: false};
+        state = {...state, admission: ledger};
+    }
     if (ledger.count >= maxRunsPerDay) return blocked(state, "daily-limit");
 
     ledger = {

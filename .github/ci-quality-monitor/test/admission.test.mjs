@@ -49,7 +49,7 @@ test("conservative default caps daily AI dossiers at ten", () =>
     assert.equal(state.admission.count, 10);
 });
 
-test("missing admission requires explicit initialization and blocks the bootstrap UTC day", () =>
+test("new admission reserves the first investigation immediately on its initialization day", () =>
 {
     const original = initialState();
     assert.equal(reserve(original).reason, "missing-ledger");
@@ -57,14 +57,31 @@ test("missing admission requires explicit initialization and blocks the bootstra
 
     const initialized = initializeAdmission(original, {now: today});
     assert.equal(initialized.allowed, false);
-    assert.equal(initialized.reason, "bootstrap");
+    assert.equal(initialized.reason, "initialized");
     assert.equal(initialized.remaining, 0);
     assert.equal(initialized.state.admission.count, 0);
     assert.equal(initialized.state.pipelines, original.pipelines);
     assert.equal(Object.hasOwn(original, "admission"), false);
-    assert.equal(reserve(initialized.state).reason, "bootstrap");
-    assert.equal(reserve(initialized.state, "101", "2026-09-08T23:59:59.999Z").reason, "bootstrap");
-    assert.equal(reserve(initialized.state, "102", tomorrow).allowed, true);
+    const first = reserve(initialized.state);
+    assert.equal(first.allowed, true);
+    assert.equal(first.state.admission.count, 1);
+    assert.deepEqual(first.state.admission.runIds, ["100"]);
+    const second = reserve(first.state, "101", "2026-09-08T23:59:59.999Z");
+    assert.equal(second.allowed, true);
+    assert.equal(second.state.admission.count, 2);
+    assert.equal(reserve(second.state, "102", tomorrow).state.admission.count, 1);
+});
+
+test("legacy zero-spend bootstrap ledgers no longer wait for midnight", () =>
+{
+    const state = initializeAdmission(initialState(), {now: today}).state;
+    state.admission.bootstrap = true;
+    const admitted = reserve(state);
+    assert.equal(admitted.allowed, true);
+    assert.equal(admitted.state.admission.bootstrap, false);
+    assert.equal(admitted.state.admission.count, 1);
+    assert.equal(state.admission.bootstrap, true);
+    assert.equal(reserve(admitted.state).allowed, false);
 });
 
 test("restored schema-1 state without admission is migrated once rather than blocked forever", () =>

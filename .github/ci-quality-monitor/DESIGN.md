@@ -147,9 +147,11 @@ explicit credential and evidence design is added.
 day before inference, including manual AI dispatches. The workflow serializes
 collectors; its checkpoint must upload successfully before AI can run. Reservations
 are never refunded. A persistent run-ID high-water mark rejects reruns and stale,
-out-of-order run IDs. Corrupt accounting fails closed. Missing/old-format admission
-state initializes closed for the entire current UTC day, then recovers on rollover;
-it never treats missing accounting as zero spend.
+out-of-order run IDs. Corrupt accounting and checkpoint access failures fail closed.
+When successful checkpoint discovery finds no ledger, initialize accounting and
+reserve the first eligible investigation immediately. Existing zero-spend
+bootstrap ledgers migrate without waiting for midnight; existing reservations are
+never erased. UTC midnight resets the daily allowance, not startup eligibility.
 
 The automatic workflow executes from the default branch, sharing one admission
 ledger. Explicit maintainer dispatches on other branches have isolated checkpoints
@@ -166,3 +168,7 @@ and requests already in flight can differ.
 Manual `evidence_only: true` dispatches collect and upload the dossier without AI,
 issue writes, or state changes. Use these on a fork and selected source ref to
 validate real historical builds. They do not bypass limits to run inference.
+For AI validation, use `evidence_only: false`: normal admission and inference run
+immediately when eligible. Fork issue outputs are staged previews, and Issue
+Monster dispatch runs only in `dotnet/sdk`, preventing validation from starting
+downstream coding agents. Production issue outputs are not staged.

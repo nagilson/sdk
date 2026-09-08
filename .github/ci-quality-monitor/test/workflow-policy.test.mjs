@@ -22,6 +22,7 @@ test("created issues are dispatched directly to Issue Monster", async () =>
     assert.match(workflow, /needs\.safe_outputs\.outputs\.process_safe_outputs_temporary_id_map/);
     assert.match(workflow, /github-token: \$\{\{ secrets\.GH_AW_GITHUB_TOKEN \|\| secrets\.GITHUB_TOKEN \}\}/);
     assert.match(workflow, /dispatchCreatedIssues/);
+    assert.match(workflow, /if: github\.repository == 'dotnet\/sdk'/);
     assert.doesNotMatch(workflow, /if: needs\.safe_outputs\.outputs\.created_issue_number != ''/);
 });
 
@@ -82,4 +83,5 @@ test("AI admission is durable, bounded, and bypassed only for read-only evidence
     assert.match(workflow, /max-ai-credits: 25/);
     assert.match(workflow, /max-daily-ai-credits: 300/);
     assert.match(workflow, /threat-detection:\s+max-ai-credits: 5/);
+    assert.match(workflow, /staged: \$\{\{ github\.repository != 'dotnet\/sdk' \}\}/);
 });

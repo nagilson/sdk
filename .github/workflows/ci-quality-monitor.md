@@ -80,7 +80,7 @@ jobs:
             const { findStateCheckpoint } = require('./.github/ci-quality-monitor/checkpoint.cjs');
             const runId = await findStateCheckpoint({github, context});
             core.setOutput('run_id', runId ?? '');
-            if (!runId) core.info('No durable checkpoint: AI admission bootstraps closed for this UTC day.');
+            if (!runId) core.info('No durable checkpoint: initialize accounting and reserve the first eligible investigation immediately.');
       - name: Restore durable state checkpoint
         if: steps.find-state-checkpoint.outputs.run_id != ''
         uses: actions/download-artifact@v8.0.1
@@ -154,6 +154,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Dispatch Issue Monster for created issues
+        if: github.repository == 'dotnet/sdk'
         uses: actions/github-script@v9.0.0
         env:
           # gh-aw exports only the first issue directly; the map contains all
@@ -253,6 +254,7 @@ safe-outputs:
     - "helix.dot.net"
     - "*.blob.core.windows.net"
   create-issue:
+    staged: ${{ github.repository != 'dotnet/sdk' }}
     title-prefix: "[AI discovered CI] "
     labels: [agentic-workflows, cookie, live-build-incident]
     allowed-labels: ["Known Build Error", "Test Debt"]

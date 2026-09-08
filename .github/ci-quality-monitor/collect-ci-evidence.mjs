@@ -117,9 +117,8 @@ async function main()
     {
         if (!options.state || !options["state-output"]) throw new Error("Admission requires durable input and output state.");
         const now = new Date();
-        admission = Object.hasOwn(state, "admission")
-            ? reserveAdmission(state, {runId: options["admission-run-id"], now})
-            : initializeAdmission(state, {now});
+        if (!Object.hasOwn(state, "admission")) state = initializeAdmission(state, {now}).state;
+        admission = reserveAdmission(state, {runId: options["admission-run-id"], now});
         if (!admission.allowed) state = admission.state;
     }
     const dossier = admission && !admission.allowed

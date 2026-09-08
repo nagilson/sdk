@@ -15,7 +15,7 @@ test("admission and evidence-only gates override actionable candidates", () =>
   assert.equal(shouldRunAgent({...dossier, evidenceOnly: true}), false);
 });
 
-test("CLI bootstrap persists a closed admission ledger and evidence-only does not mutate it", async () =>
+test("CLI initializes admission immediately without spending on empty evidence or evidence-only runs", async () =>
 {
   const directory = await mkdtemp(path.join(tmpdir(), "ci-admission-"));
   try
@@ -31,8 +31,9 @@ test("CLI bootstrap persists a closed admission ledger and evidence-only does no
     const first = spawnSync(process.execPath, args, {encoding: "utf8"});
     assert.equal(first.status, 0, first.stderr);
     const before = await readFile(state, "utf8");
-    assert.equal(JSON.parse(before).admission.bootstrap, true);
-    assert.equal(JSON.parse(await readFile(output, "utf8")).admission.allowed, false);
+    assert.equal(JSON.parse(before).admission.bootstrap, false);
+    assert.equal(JSON.parse(before).admission.count, 0);
+    assert.equal(JSON.parse(await readFile(output, "utf8")).admission.allowed, true);
     const second = spawnSync(process.execPath, [...args, "--evidence-only", "true"], {encoding: "utf8"});
     assert.equal(second.status, 0, second.stderr);
     assert.equal(await readFile(state, "utf8"), before);
