@@ -138,13 +138,29 @@ test("scheduled PR reconciliation bootstraps and does not mark deferred builds p
 {
   const builds = [pr(1, 101)];
   const state = {schemaVersion: 1, pipelines: {}};
-  const azure = {listCompletedBuildWindow: async () => ({builds, coverage: {truncated: false}}),
+  const azure = {listCompletedBuildWindow: async () => ({builds,
+    coverage: {truncated: false, through: "2026-09-05T01:16:56Z"}}),
     listCompletedBuilds: async () => []};
   const selector = new BuildCandidateSelector({pipelines: [pipeline]}, state, () => azure,
     {checkPipeline: async () => null});
   assert.equal((await selector.selectScheduledCandidates()).candidates.length, 0);
-  builds.unshift(...Array.from({length: MAX_SELECTED_BUILDS + 1}, (_, index) => pr(index + 2, index + 102)));
+  builds.unshift(...Array.from({length: MAX_SELECTED_BUILDS + 1}, (_, index) =>
+    ({...pr(index + 2, index + 102), finishTime: "2026-09-05T02:00:00Z"})));
   assert.equal((await selector.selectScheduledCandidates()).candidates.length, MAX_SELECTED_BUILDS);
   assert.equal((await selector.selectScheduledCandidates()).candidates.length, 1);
   assert.equal((await selector.selectScheduledCandidates()).candidates.length, 0);
+});
+
+test("a full history window remains bootstrapped and retargeted merged PRs are rejected", async () =>
+{
+  const builds = Array.from({length: 250}, (_, index) => pr(index + 1, index + 101));
+  const azure = {listCompletedBuildWindow: async () => ({builds,
+    coverage: {through: "2026-09-05T01:16:56Z", truncated: true}}),
+    listCompletedBuilds: async () => [], getBuild: async () => pr(42, 123, "release/10.0")};
+  const selector = new BuildCandidateSelector({pipelines: [pipeline]},
+    {schemaVersion: 1, pipelines: {}}, () => azure, {checkPipeline: async () => null});
+  assert.equal((await selector.selectScheduledCandidates()).candidates.length, 0);
+  assert.equal((await selector.selectScheduledCandidates()).candidates.length, 0);
+  assert.equal((await selector.selectEventCandidate("42",
+    {number: 123, baseRef: "main", mergeCommitSha: "landed"})).candidates.length, 0);
 });

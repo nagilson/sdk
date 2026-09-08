@@ -153,7 +153,8 @@ terminating a hung test host, to the underlying product or infrastructure cause.
 Branch polling state is keyed by Azure DevOps organization, project, definition
 ID, and branch. Automatic investigation state additionally retains trusted audit
 contexts such as direct stable-branch delivery or merged-PR promotion. Each
-entry retains up to 100 keys. Build attempt keys contain build ID, finish time,
+entry retains up to 1,000 keys, larger than the bounded history window. PR
+bootstrap also records a finish-time cutoff. Build attempt keys contain build ID, finish time,
 and result, so a retried attempt that updates an existing build ID can be
 analyzed again. Every daily poll re-reads the latest 20 builds to tolerate builds
 finishing out of queue order.

@@ -20,9 +20,9 @@ import
 
 /** @typedef {import("./types.d.ts").CandidateSelection} CandidateSelection */
 
-function emptySelection()
+function emptySelection(reason)
 {
-  return {candidates: [], bootstrap: false, pipelineHealth: []};
+  return {candidates: [], bootstrap: false, pipelineHealth: [], selectionNotes: reason ? [reason] : []};
 }
 
 export class BuildCandidateSelector
@@ -83,7 +83,11 @@ export class BuildCandidateSelector
     const {targetBranch} = getBuildContext(build);
     if (!isPullRequestBuild(build, pipeline)
       || !(pipeline.stableBranches ?? []).includes(targetBranch)
-      || !(pipeline.pullRequestTargets ?? []).includes(targetBranch)) return emptySelection();
+      || !(pipeline.pullRequestTargets ?? []).includes(targetBranch))
+    {
+      return emptySelection(`Build ${build.id}: ${getBuildContext(build).unavailable
+        ?? `PR target ${targetBranch ?? "unknown"} is not enabled`}.`);
+    }
     const auditContext = `pr-target:${targetBranch}`;
     const auditKey = createAuditKey(build, "pull-request", auditContext);
     if (!isFailedBuild(build) || isAuditProcessed(this.state, pipeline, auditKey)) return emptySelection();
@@ -113,6 +117,7 @@ export class BuildCandidateSelector
       || !isPullRequestBuild(selected.build, selected.pipeline)) return emptySelection();
     const stableTarget = `refs/heads/${mergedPullRequest.baseRef}`;
     if (!(selected.pipeline.stableBranches ?? []).includes(stableTarget)
+      || getBuildContext(selected.build).targetBranch !== stableTarget
       || `${selected.build.triggerInfo?.["pr.number"]}` !== `${mergedPullRequest.number}`)
     {
       return emptySelection();
@@ -171,6 +176,7 @@ export class BuildCandidateSelector
           for (const build of window.builds.filter(build => isPullRequestBuild(build, pipeline) && isFailedBuild(build)))
           {
             if (candidates.length >= MAX_SELECTED_BUILDS) break;
+            if (build.finishTime <= this.state.pipelines[key].baselineThrough) continue;
             if ((this.state.pipelines[key].processedBuildKeys ?? []).includes(
               createBuildAttemptKey(build))) continue;
             const selection = await this.selectPullRequestCandidate(pipeline, build, window);
@@ -180,6 +186,7 @@ export class BuildCandidateSelector
         else
         {
           recordProcessedBuilds(this.state, key, window.builds);
+          this.state.pipelines[key].baselineThrough = window.coverage.through;
         }
       }
       for (const branch of pipeline.branches)

@@ -42,6 +42,7 @@ export interface CandidateSelection
   candidates: BuildCandidate[];
   bootstrap: boolean;
   pipelineHealth: Observation[];
+  selectionNotes?: string[];
 }
 
 export interface CiEvidenceDossier

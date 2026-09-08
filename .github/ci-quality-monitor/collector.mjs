@@ -50,6 +50,7 @@ export class CiEvidenceCollector
             eventHeadSha: eventHeadSha || null,
             mergedPullRequest,
             bootstrap: selected.bootstrap,
+            selectionNotes: selected.selectionNotes ?? [],
             pipelineHealth: selected.pipelineHealth,
             failures
         };

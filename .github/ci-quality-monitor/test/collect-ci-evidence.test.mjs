@@ -252,6 +252,7 @@ test("merged stable-target PR failures promote the same Azure attempt once", asy
     sourceVersion: "merge-sha",
     finishTime: "2026-07-24T15:00:00Z",
     triggerInfo: { "pr.sourceSha": "head-sha", "pr.number": "124" },
+    parameters: JSON.stringify({"system.pullRequest.targetBranch": "main"}),
     definition: { id: 101, name: "dotnet-sdk-public-ci" },
     repository: { id: "dotnet/sdk" },
     validationResults: [{ result: "error", message: "Unexpected parameter 'example'" }]
