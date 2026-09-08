@@ -66,3 +66,18 @@ test("related observations are compacted after recurrence analysis", async () =>
     assert.equal("stackTrace" in compact[0], false);
     assert.ok(JSON.stringify(result).length < 100_000);
 });
+
+test("matching hang fingerprints preserve distinct queue occurrences and active tests", async () =>
+{
+    const observations = ["mac", "linux"].map(queue => ({
+        kind: "helix-work-item", phase: "test-execution", failureType: "timeout",
+        fingerprint: "hang", component: "Example.Tests.dll.1", mechanism: "Hang dump timeout",
+        actionable: true, jobId: queue, queue, consoleSummary: {activeTest: queue}
+    }));
+    const collector = new FailureEvidenceCollector(() => ({
+        getTimeline: async () => ({records: []}), getTestFailures: async () => []
+    }), {collectObservations: async () => [...observations, observations[0]]});
+    const result = await collector.collectFailureEvidence({}, {id: 1, validationResults: []}, []);
+    assert.equal(result.issueCandidates.length, 2);
+    assert.deepEqual(result.issueCandidates.map(observation => observation.consoleSummary.activeTest), ["mac", "linux"]);
+});

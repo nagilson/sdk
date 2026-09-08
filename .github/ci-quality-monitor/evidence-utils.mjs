@@ -21,6 +21,8 @@ export function isNetworkFailure(value)
 export function normalizeEvidenceText(value, maxCharacters = MAX_LOG_CHARACTERS)
 {
     return `${value ?? ""}`
+        // Console writers can concatenate a PID or dump directory with the next event.
+        .replace(/(\S)(?=Hang (?:dump )?timeout\b)/gi, "$1\n")
         .replace(/[0-9a-f]{8}-[0-9a-f-]{27,}/gi, "<guid>")
         .replace(/\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\b/g, "<timestamp>")
         .replace(/(?:[A-Za-z]:\\a\\_work\\\d+\\s|\/(?:Users\/runner\/work\/\d+\/s|mnt\/vss\/_work\/\d+\/s|__w\/\d+\/s))/gi, "<workspace>")
@@ -44,7 +46,23 @@ export function createFingerprintSegment(value)
 
 export function createFailureFingerprint({phase, failureType, component, mechanism})
 {
-    return [phase, failureType, component, mechanism].map(createFingerprintSegment).join("|");
+    const stableMechanism = isHangTimeout(failureType, mechanism) ? "hang-timeout" : mechanism;
+    return [phase, failureType, component, stableMechanism].map(createFingerprintSegment).join("|");
+}
+
+function isHangTimeout(failureType, mechanism)
+{
+    // Inspect the raw marker before path normalization or the 180-character segment limit.
+    return failureType === "timeout"
+        && /Hang (?:dump )?timeout\b/i.test(`${mechanism ?? ""}`);
+}
+
+export function createFailureFamilyFingerprint({phase, failureType, component, mechanism})
+{
+    if (!isHangTimeout(failureType, mechanism)) return undefined;
+    // A shared symptom family is not evidence of a shared root cause.
+    return ["failure-family-v1", phase, failureType, component, "hang-timeout"]
+        .map(createFingerprintSegment).join("|");
 }
 
 export function createBuildSummary(build)

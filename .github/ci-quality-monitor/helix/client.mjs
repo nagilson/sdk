@@ -1,5 +1,6 @@
-import {MAX_CONSOLE_CHARACTERS, MAX_TEST_FAILURES} from "../constants.mjs";
+import {MAX_CONSOLE_CHARACTERS, MAX_TEST_DIAGNOSTIC_CHARACTERS, MAX_TEST_FAILURES} from "../constants.mjs";
 import {
+  createFailureFamilyFingerprint,
   createFailureFingerprint,
   isAuthenticationFailure,
   isNetworkFailure,
@@ -8,6 +9,7 @@ import {
 import {HttpClient} from "../http-client.mjs";
 import {createTestKbeCandidate} from "../known-build-error.mjs";
 import {parseTestResultXml} from "../test-results.mjs";
+import {collectConsoleEvidence, hasHangWatchdog} from "./console-evidence.mjs";
 import
 {
   classifyWorkItem,
@@ -29,10 +31,20 @@ function helixWorkItemUrl(reference)
 
 function selectArtifactLinks(files = [])
 {
-  return files
-    .filter(file => /\.(?:trx|xml|binlog|dmp|core|crash|log)$/i.test(file.FileName))
-    .slice(0, 10)
-    .map(file => ({name: file.FileName, url: file.Uri}));
+  const candidates = files.filter(file => /\.(?:trx|xml|binlog|dmp|core|crash|log)$/i.test(file.FileName));
+  const rank = file => /\.trx$/i.test(file.FileName) ? 0
+    : /\.(?:dmp|core|crash)$/i.test(file.FileName) ? 1 : 2;
+  const retained = [...candidates].sort((a, b) => rank(a) - rank(b)).slice(0, 10);
+  return {
+    artifacts: retained.map(file => ({name: file.FileName, url: file.Uri})),
+    artifactSelection: {
+      totalFiles: files.length,
+      eligibleFiles: candidates.length,
+      retainedFiles: retained.length,
+      omittedFiles: candidates.length - retained.length,
+      truncated: candidates.length > retained.length
+    }
+  };
 }
 
 export function getArtifactEvidenceSources(files = [])
@@ -43,7 +55,7 @@ export function getArtifactEvidenceSources(files = [])
   return sources;
 }
 
-function createTestObservation(reference, test, testSummary)
+function createTestObservation(reference, test, testSummary, testResultEvidence)
 {
   const component = test.fullyQualifiedName || test.testName;
   const mechanism = summarizeTestMechanism(test.errorMessage, test.outcome);
@@ -59,6 +71,9 @@ function createTestObservation(reference, test, testSummary)
     component,
     mechanism,
     fingerprint,
+    failureFamilyFingerprint: hasHangWatchdog(test.errorMessage) ? createFailureFamilyFingerprint({
+      phase, failureType, component, mechanism: test.errorMessage
+    }) : undefined,
     mechanismFingerprint: createFailureFingerprint({
       phase, failureType, component: "shared", mechanism: sharedMechanism
     }),
@@ -69,6 +84,7 @@ function createTestObservation(reference, test, testSummary)
     outcome: test.outcome,
     duration: test.duration,
     testSummary,
+    testResultEvidence,
     stackTrace: normalizeEvidenceText(test.stackTrace),
     kbe: createTestKbeCandidate(test, fingerprint)
   };
@@ -87,17 +103,17 @@ function classifyTestFailureType(errorMessage, outcome)
   return "test-assertion";
 }
 
-function createWorkItemObservation(reference, workItem, consoleText, testResults, unavailable)
+function createWorkItemObservation(reference, workItem, console, testResults, unavailable)
 {
-  const classification = classifyWorkItem(workItem.ExitCode ?? reference.exitCode, consoleText);
-  const consoleSummary = summarizeHelixConsole(consoleText);
+  const {classification, consoleSummary, consoleEvidence} = console;
   const causalConsoleLines = consoleSummary.hangEvidence.filter(line => line === consoleSummary.activeTest
-    || /still running|hang timeout|timed? ?out|test host crashed|recovered \d+ test result|exit code/i.test(line));
+    || /still running|hang (?:dump )?timeout|timed? ?out|test host crashed|recovered \d+ test result|exit code/i.test(line));
   const mechanismLines = causalConsoleLines.length > 0
     ? causalConsoleLines
-    : consoleText.split(/\r?\n/).filter(Boolean).slice(-8);
-  const mechanism = mechanismLines.join("\n") || `Exit code ${workItem.ExitCode ?? reference.exitCode}`;
-  const artifacts = selectArtifactLinks(workItem.Files);
+    : consoleEvidence.excerpt.split(/\r?\n/).filter(Boolean).slice(-8);
+  const mechanism = normalizeEvidenceText(mechanismLines.join("\n")
+    || `Exit code ${workItem.ExitCode ?? reference.exitCode}`);
+  const artifactEvidence = selectArtifactLinks(workItem.Files);
   return {
     kind: "helix-work-item",
     ...classification,
@@ -105,6 +121,9 @@ function createWorkItemObservation(reference, workItem, consoleText, testResults
     component: reference.workItem,
     mechanism,
     fingerprint: createFailureFingerprint({...classification, component: reference.workItem, mechanism}),
+    failureFamilyFingerprint: consoleSummary.hangDetected ? createFailureFamilyFingerprint({
+      ...classification, component: reference.workItem, mechanism
+    }) : undefined,
     actionable: classification.failureType !== "infrastructure-unavailable",
     jobId: reference.jobId,
     queue: reference.queue,
@@ -113,9 +132,11 @@ function createWorkItemObservation(reference, workItem, consoleText, testResults
     machine: workItem.MachineName,
     duration: workItem.Duration,
     testSummary: testResults.summary,
+    testResultEvidence: testResults.evidence,
     consoleSummary,
+    consoleEvidence,
     consoleUrl: workItem.ConsoleOutputUri,
-    artifacts,
+    ...artifactEvidence,
     unavailable
   };
 }
@@ -127,10 +148,18 @@ export class HelixEvidenceClient
     this.http = new HttpClient(fetchImplementation);
   }
 
-  async getConsoleEvidence(url)
+  async getConsoleEvidence(url, exitCode)
   {
     const text = await (await this.http.response(url)).text();
-    return normalizeEvidenceText(text.slice(-MAX_CONSOLE_CHARACTERS), MAX_CONSOLE_CHARACTERS);
+    const consoleEvidence = collectConsoleEvidence(text, MAX_CONSOLE_CHARACTERS);
+    const classificationText = consoleEvidence.events.filter(event => [
+      "hang-timeout", "timeout", "process-exit", "process-crash", "test-run-completed", "infrastructure-error"
+    ].includes(event.kind)).map(event => event.text).join("\n");
+    return {
+      classification: classifyWorkItem(exitCode, classificationText),
+      consoleSummary: summarizeHelixConsole(text, consoleEvidence),
+      consoleEvidence
+    };
   }
 
   async getTestResults(workItem)
@@ -138,22 +167,54 @@ export class HelixEvidenceClient
     const files = workItem.Files ?? [];
     const testFile = files.find(file => /\.trx$/i.test(file.FileName))
       ?? files.find(file => /\.xml$/i.test(file.FileName));
-    if (!testFile) return {summary: null, failures: []};
+    if (!testFile) return {
+      summary: null,
+      failures: [],
+      evidence: {candidateFiles: 0, retainedFiles: 0, omittedFiles: 0, retainedFailures: 0, truncated: false}
+    };
     const response = await this.http.response(testFile.Uri);
     const results = parseTestResultXml(Buffer.from(await response.arrayBuffer()));
-    return {...results, failures: results.failures.slice(0, MAX_TEST_FAILURES)};
+    const failures = results.failures.slice(0, MAX_TEST_FAILURES);
+    const totalFailures = ["failed", "error", "timeout", "aborted"]
+      .reduce((sum, outcome) => sum + (results.summary?.[outcome] ?? 0), 0);
+    const candidateFiles = files.filter(file => /\.(?:trx|xml)$/i.test(file.FileName)).length;
+    const possiblyTruncatedDiagnostics = failures.filter(test =>
+      test.errorMessage?.length === MAX_TEST_DIAGNOSTIC_CHARACTERS
+      || test.stackTrace?.length === MAX_TEST_DIAGNOSTIC_CHARACTERS).length;
+    return {
+      ...results,
+      failures,
+      evidence: {
+        source: {name: testFile.FileName, url: testFile.Uri},
+        candidateFiles,
+        retainedFiles: 1,
+        omittedFiles: candidateFiles - 1,
+        totalResults: results.summary?.total ?? null,
+        totalFailures,
+        retainedFailures: failures.length,
+        omittedFailures: Math.max(0, totalFailures - failures.length),
+        diagnosticCharacterLimit: MAX_TEST_DIAGNOSTIC_CHARACTERS,
+        possiblyTruncatedDiagnostics,
+        truncated: totalFailures > failures.length || candidateFiles > 1 || possiblyTruncatedDiagnostics > 0
+      }
+    };
   }
 
   async collectWorkItemObservations(reference)
   {
     const url = helixWorkItemUrl(reference);
     const workItem = await this.http.json(url);
-    let consoleText = "";
+    const exitCode = workItem.ExitCode ?? reference.exitCode;
+    let console = {
+      classification: classifyWorkItem(exitCode, ""),
+      consoleSummary: summarizeHelixConsole(""),
+      consoleEvidence: collectConsoleEvidence("")
+    };
     let testResults = {summary: null, failures: []};
     const unavailable = [];
     try
     {
-      consoleText = await this.getConsoleEvidence(`${url}/console`);
+      console = await this.getConsoleEvidence(`${url}/console`, exitCode);
     } catch (error)
     {
       unavailable.push(normalizeEvidenceText(error.message));
@@ -166,12 +227,18 @@ export class HelixEvidenceClient
       unavailable.push(normalizeEvidenceText(error.message));
     }
     const testObservations = testResults.failures
-      .map(test => createTestObservation(reference, test, testResults.summary));
+      .map(test => ({
+        ...createTestObservation(reference, test, testResults.summary, testResults.evidence),
+        consoleSummary: console.consoleSummary,
+        consoleEvidence: console.consoleEvidence,
+        consoleUrl: workItem.ConsoleOutputUri
+      }));
     const workItemObservation = createWorkItemObservation(
-      reference, workItem, consoleText, testResults, unavailable);
+      reference, workItem, console, testResults, unavailable);
     if (testObservations.length === 0) return [workItemObservation];
-    const independentlyClassified = workItemObservation.failureType !== "unknown-error"
-      && !testObservations.some(observation => observation.failureType === workItemObservation.failureType);
+    const independentlyClassified = Boolean(workItemObservation.failureFamilyFingerprint)
+      || (workItemObservation.failureType !== "unknown-error"
+        && !testObservations.some(observation => observation.failureType === workItemObservation.failureType));
     return independentlyClassified ? [...testObservations, workItemObservation] : testObservations;
   }
 

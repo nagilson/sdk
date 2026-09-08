@@ -1,4 +1,5 @@
 import {normalizeEvidenceText, splitNonEmptyLines} from "../evidence-utils.mjs";
+import {collectConsoleEvidence} from "./console-evidence.mjs";
 
 export function parseHelixWorkItemReferences(messages)
 {
@@ -73,27 +74,29 @@ export function classifyWorkItem(exitCode, consoleText, testFailures = [])
   };
 }
 
-export function summarizeHelixConsole(consoleText)
+export function summarizeHelixConsole(consoleText, evidence = collectConsoleEvidence(consoleText))
 {
-  const lines = splitNonEmptyLines(consoleText);
-  const runningTestsMarker = lines.findIndex(line => /tests were still running when dump was taken/i.test(line));
-  const markedActiveTest = runningTestsMarker >= 0
-    ? lines.slice(runningTestsMarker + 1).find(line => /^\[[\d:.]+\]\s+\S/.test(line))
-    : null;
-  const relevant = lines
-    .filter(line => /hang|timed? ?out|active test|currently running|process tree|test host crashed|exit code|dump|permission denied|diagnostics IPC/i.test(line))
-    .filter(line => !/^[-*]?\s*(?:\/|[A-Za-z]:\\)/.test(line));
-  const hostExitCode = [...lines].reverse().map(line => line.match(/exit code(?: is)?\s*['"]?(-?\d+)/i)?.[1])
+  const events = evidence.events;
+  const activeTests = events.filter(event => event.kind === "active-test");
+  const hostExitCode = [...events].reverse().filter(event => event.kind === "process-exit")
+    .map(event => event.text.match(/exit code(?: is)?\s*['"]?(-?\d+)/i)?.[1])
     .find(Boolean);
-  const activeTest = markedActiveTest
-    ?? [...relevant].reverse().find(line => /active test|currently running|has been running/i.test(line));
-  if (activeTest && !relevant.includes(activeTest)) relevant.push(activeTest);
-  const dumpFailures = relevant.filter(line => /dump.*(?:fail|error)|permission denied|diagnostics IPC/i.test(line)).slice(-4);
+  const hangEvents = events.filter(event => event.kind === "hang-timeout");
+  const relevant = events.filter(event => !["diagnostic-context", "operating-system"].includes(event.kind));
+  const hangEvidence = [...new Set([
+    ...hangEvents.map(event => event.text),
+    ...activeTests.map(event => event.text.trim()),
+    ...relevant.map(event => event.text)
+  ])];
   return {
-    activeTest: activeTest ? normalizeEvidenceText(activeTest) : null,
+    activeTest: activeTests.at(-1)?.text.trim() ?? null,
+    activeTests: activeTests.map(event => event.text.trim()),
+    hangDetected: hangEvents.length > 0,
     hostExitCode: hostExitCode ? Number(hostExitCode) : null,
-    hangEvidence: [...new Set(relevant.slice(-12).map(line => normalizeEvidenceText(line)))],
-    dumpFailures: [...new Set(dumpFailures.map(line => normalizeEvidenceText(line)))]
+    operatingSystem: events.findLast(event => event.kind === "operating-system")?.text ?? null,
+    hangEvidence: hangEvidence.slice(0, 12),
+    omittedHangEvidence: Math.max(0, hangEvidence.length - 12),
+    dumpFailures: [...new Set(events.filter(event => event.kind === "dump-failure").map(event => event.text))].slice(-4)
   };
 }
 
