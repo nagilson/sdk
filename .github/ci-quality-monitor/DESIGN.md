@@ -127,9 +127,10 @@ The collector uploads the updated state before agent activation. If inference or
 scheduled run does not automatically spend tokens on the same processing key
 again. Manual dispatch intentionally bypasses this ledger.
 
-When neither state source is available, the collector bootstraps its build
-window without activating the agent. This prevents state loss from causing a
-burst of historical investigations.
+The first scheduled reconciliation baselines its historical build window rather
+than replaying old failures. This is separate from admission accounting: a new
+eligible completion event or manual investigation can run immediately, including
+before the first scheduled reconciliation.
 
 ## Scope Configuration
 
