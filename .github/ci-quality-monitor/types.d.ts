@@ -6,6 +6,7 @@ export interface Pipeline
   repository: string;
   branches: string[];
   stableBranches: string[];
+  pullRequestTargets?: string[];
 }
 
 export interface Observation
@@ -27,10 +28,13 @@ export interface BuildCandidate
   pipeline: Pipeline;
   build: Record<string, unknown>;
   history: Array<Record<string, unknown>>;
-  monitoringScope?: "stable-branch";
+  monitoringScope?: "stable-branch" | "pull-request";
   priority?: "HIGH";
   auditContext?: string;
   mergedPullRequest?: Record<string, unknown>;
+  requiresIndependentRecurrence?: boolean;
+  targetBranch?: string | null;
+  historyCoverage?: Record<string, unknown>;
 }
 
 export interface CandidateSelection

@@ -1,10 +1,16 @@
 export const AZURE_API_VERSION = "7.1";
 export const DEFAULT_BUILD_LIMIT = 20;
+export const HISTORY_WINDOW_DAYS = 7;
+export const HISTORY_PAGE_SIZE = 50;
+export const MAX_HISTORY_PAGES = 5;
+export const MAX_HISTORY_DETAILS = 50;
+export const MAX_SELECTED_BUILDS = 3;
 export const MAX_CONSOLE_CHARACTERS = 16_000;
 export const MAX_HELIX_REFERENCES = 20;
 export const MAX_LOG_CHARACTERS = 4_000;
 export const MAX_PROCESSED_BUILD_KEYS = 100;
 export const MAX_RELATED_BUILDS = 5;
+export const MAX_RELATED_BUILD_SCAN = 20;
 export const MAX_RELATED_CONTEXT_OBSERVATIONS = 10;
 export const MAX_RELATED_HELIX_REFERENCES = 10;
 export const MAX_RELATED_MECHANISM_CHARACTERS = 1_000;

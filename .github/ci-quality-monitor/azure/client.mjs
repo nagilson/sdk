@@ -2,11 +2,16 @@ import
 {
   AZURE_API_VERSION,
   DEFAULT_BUILD_LIMIT,
+  HISTORY_WINDOW_DAYS,
+  HISTORY_PAGE_SIZE,
+  MAX_HISTORY_PAGES,
+  MAX_HISTORY_DETAILS,
   MAX_LOG_CHARACTERS,
   MAX_TEST_FAILURES
 } from "../constants.mjs";
 import {normalizeEvidenceText} from "../evidence-utils.mjs";
 import {HttpClient} from "../http-client.mjs";
+import {getBuildContext} from "../build-context.mjs";
 
 function buildApiBase(pipeline)
 {
@@ -28,6 +33,7 @@ export class AzureDevOpsClient
   {
     this.pipeline = pipeline;
     this.http = new HttpClient(fetchImplementation);
+    this.historyWindows = new Map();
   }
 
   async fetchResponse(url, accept = "application/json")
@@ -60,6 +66,65 @@ export class AzureDevOpsClient
   listRecentBuilds(branch)
   {
     return this.listBuilds({branchName: branch, queryOrder: "queueTimeDescending"});
+  }
+
+  listCompletedBuildWindow(through = new Date().toISOString())
+  {
+    if (!this.historyWindows.has(through))
+    {
+      this.historyWindows.set(through, this.fetchCompletedBuildWindow(through));
+    }
+    return this.historyWindows.get(through);
+  }
+
+  async fetchCompletedBuildWindow(through)
+  {
+    const end = new Date(through);
+    if (!Number.isFinite(end.getTime())) throw new Error(`Invalid history end time: ${through}`);
+    const start = new Date(end.getTime() - HISTORY_WINDOW_DAYS * 86_400_000).toISOString();
+    const builds = [];
+    const unavailableTargets = [];
+    let continuationToken;
+    let pages = 0;
+    let details = 0;
+    do
+    {
+      const query = new URLSearchParams({
+        definitions: `${this.pipeline.definitionId}`, repositoryId: this.pipeline.repository,
+        repositoryType: "GitHub", statusFilter: "completed", queryOrder: "finishTimeDescending",
+        minTime: start, maxTime: end.toISOString(), "$top": `${HISTORY_PAGE_SIZE}`,
+        "api-version": AZURE_API_VERSION
+      });
+      if (continuationToken) query.set("continuationToken", continuationToken);
+      const response = await this.fetchResponse(`${buildApiBase(this.pipeline)}/build/builds?${query}`);
+      const page = (await response.json()).value ?? [];
+      for (let build of page)
+      {
+        if (build.definition?.id !== this.pipeline.definitionId
+          || build.repository?.id?.toLowerCase() !== this.pipeline.repository.toLowerCase()) continue;
+        if (build.reason?.toLowerCase() === "pullrequest" && !build.parameters && details < MAX_HISTORY_DETAILS)
+        {
+          build = await this.getBuild(build.id);
+          details++;
+        }
+        const context = getBuildContext(build);
+        if (context.unavailable) unavailableTargets.push({buildId: build.id, reason: context.unavailable});
+        builds.push(build);
+      }
+      pages++;
+      continuationToken = response.headers?.get("x-ms-continuationtoken");
+    } while (continuationToken && pages < MAX_HISTORY_PAGES);
+    return {
+      builds: [...new Map(builds.map(build => [build.id, build])).values()],
+      coverage: {from: start, through: end.toISOString(), pages, scannedBuilds: builds.length,
+        truncated: Boolean(continuationToken), unavailableTargets, detailRequests: details}
+    };
+  }
+
+  async listTargetBranchHistory(targetBranch, through)
+  {
+    const window = await this.listCompletedBuildWindow(through);
+    return {...window, builds: window.builds.filter(build => getBuildContext(build).targetBranch === targetBranch)};
   }
 
   async findPullRequestBuildByHead(headSha, pullRequestNumber = null)

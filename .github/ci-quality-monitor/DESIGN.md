@@ -36,14 +36,31 @@ The workflow supports four delivery paths:
 
 | Trigger | Behavior |
 | --- | --- |
-| Completed Azure check suite | Resolve the public SDK build and inspect a failed direct stable-branch build. |
+| Completed Azure check suite | Resolve the public SDK build; inspect direct stable builds and independently recurring failures on configured PR targets. |
 | Merged pull request | Locate the final public SDK validation and inspect it only when the PR merged into an allowlisted stable target after a failed validation. |
-| Daily schedule | Reconcile missed stable-branch events and check registered branch heartbeats. |
+| Daily schedule | Reconcile missed stable-branch and configured PR-target events and check registered branch heartbeats. |
 | Manual dispatch | Inspect the requested completed public build without consulting the automatic processed-build ledger. |
 
-The current automatic policy covers stable-branch incidents. Open pull request
-failures are not treated as repository-wide incidents because the pull request
-itself is a plausible cause.
+[`pipelines.json`](pipelines.json) explicitly enables PR coverage with
+`pullRequestTargets`, a subset of `stableBranches`. The collector resolves the
+target at build time from Azure build `parameters`, validates the PR number against
+the source ref and trigger metadata, and retains the target and provenance in
+build summaries. Unknown or conflicting metadata never defaults to main; the
+collector does not substitute a PR's potentially retargeted current GitHub base.
+
+For enabled targets, history includes direct target builds and all PR refs targeting
+that branch. Retrieval covers seven days before the selected build's finish time,
+at most five pages of 50 builds and 50 detail lookups. Coverage reports pagination
+truncation and unresolved targets. Scheduled reconciliation uses a current window.
+Up to 20 independent failed builds' timelines are searched for relevant test
+assemblies before collecting at most five related builds' detailed evidence.
+
+Open PR observations cannot activate AI without a matching observation from a
+different PR or direct target commit. Same-PR attempts and same-commit retries
+never establish independence. Matching evidence permits investigation, not a
+claim that the underlying root cause is established. Scheduled runs process at
+most three selected builds and leave excess builds pending; a new PR polling
+scope establishes its baseline without replaying old PRs.
 
 ## Failure Model
 
@@ -73,8 +90,9 @@ mechanism. Normalization removes volatile identifiers, timestamps, and
 machine-specific paths. Evidence source order is not part of identity.
 
 Named tests retain both a per-test fingerprint and a mechanism fingerprint.
-Known Build Error recurrence requires the same test and mechanism on a
-different commit. Retries of one commit do not establish recurrence.
+Known Build Error recurrence requires the same test and mechanism on an
+independent build. Retries of one commit or attempts of the same PR do not
+establish recurrence.
 
 ## Processing State
 

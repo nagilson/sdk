@@ -161,7 +161,7 @@ test("same build ID is reconsidered when its completed attempt changes", () => {
   assert.deepEqual(selected.failures, [retried]);
 });
 
-test("open PR check-suite builds do not run in the HIGH-only milestone", async () => {
+test("open PR check-suite builds require an explicitly configured target", async () => {
   const build = {
     id: 42,
     result: "failed",
@@ -565,12 +565,12 @@ test("applyKbeRecurrence requires the same test and mechanism", () => {
 test("issue candidates contain only actionable observations from the selected build", async () => {
   const build = {
     id: 45, status: "completed", result: "failed", reason: "manual",
-    sourceBranch: "refs/heads/main", finishTime: "2026-07-24T14:00:00Z",
+    sourceBranch: "refs/heads/main", finishTime: "2026-07-24T14:00:00Z", sourceVersion: "current",
     definition: { id: 101 }, repository: { id: "dotnet/sdk" },
     validationResults: [{ result: "error", message: "Current YAML failure" }]
   };
   const related = {
-    ...build, id: 44, finishTime: "2026-07-24T13:00:00Z", validationResults: undefined
+    ...build, id: 44, finishTime: "2026-07-24T13:00:00Z", sourceVersion: "previous", validationResults: undefined
   };
   const fetchImplementation = async url => {
     if (url.includes("builds/45?")) return new Response(JSON.stringify(build), { status: 200 });

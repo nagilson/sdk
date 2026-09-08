@@ -3,12 +3,14 @@ import {applyKbeRecurrence, getTimelineFailuresFromRecords} from "./collector-po
 import {
   MAX_HELIX_REFERENCES,
   MAX_RELATED_BUILDS,
+  MAX_RELATED_BUILD_SCAN,
   MAX_RELATED_CONTEXT_OBSERVATIONS,
   MAX_RELATED_HELIX_REFERENCES,
   MAX_RELATED_MECHANISM_CHARACTERS,
   MAX_TASK_LOGS
 } from "./constants.mjs";
 import {createBuildSummary, isFailedBuild, normalizeEvidenceText} from "./evidence-utils.mjs";
+import {areIndependentBuilds} from "./build-context.mjs";
 
 export class FailureEvidenceCollector
 {
@@ -18,20 +20,41 @@ export class FailureEvidenceCollector
     this.helixEvidence = helixEvidenceClient;
   }
 
-  async collectRelatedFailureEvidence(pipeline, buildId, history)
+  async collectRelatedFailureEvidence(pipeline, currentBuild, history, currentObservations)
   {
     const related = [];
+    const current = createBuildSummary(currentBuild);
+    const identities = new Set();
     const failedBuilds = history
-      .filter(build => build.id !== buildId && isFailedBuild(build))
-      .slice(0, MAX_RELATED_BUILDS);
+      .filter(build => isFailedBuild(build) && areIndependentBuilds(current, createBuildSummary(build)))
+      .filter(build =>
+      {
+        const summary = createBuildSummary(build);
+        const key = summary.pullRequestNumber ? `pr:${summary.pullRequestNumber}` : `commit:${summary.commit}`;
+        if (identities.has(key)) return false;
+        identities.add(key);
+        return true;
+      })
+      .slice(0, MAX_RELATED_BUILD_SCAN);
+    const workItems = new Set(currentObservations.map(observation =>
+      observation.workItem ?? (observation.kind === "helix-work-item" ? observation.component : null))
+      .filter(Boolean).map(name => name.replace(/\.dll\.\d+$/, ".dll")));
     for (const build of failedBuilds)
     {
+      if (related.length >= MAX_RELATED_BUILDS) break;
       try
       {
         const timeline = await this.getAzureClient(pipeline).getTimeline(build.id);
         const timelineFailures = getTimelineFailuresFromRecords(timeline.records);
+        const references = timelineFailures.flatMap(failure => failure.helixReferences ?? []);
+        if (workItems.size && !references.some(reference =>
+          workItems.has(reference.workItem.replace(/\.dll\.\d+$/, ".dll")))) continue;
+        const relevantFailures = workItems.size ? timelineFailures.map(failure => ({
+          ...failure, helixReferences: (failure.helixReferences ?? []).filter(reference =>
+            workItems.has(reference.workItem.replace(/\.dll\.\d+$/, ".dll")))
+        })) : timelineFailures;
         const observations = await this.helixEvidence.collectObservations(
-          timelineFailures, MAX_RELATED_HELIX_REFERENCES);
+          relevantFailures, MAX_RELATED_HELIX_REFERENCES);
         related.push({
           build: createBuildSummary(build),
           taskFailures: timelineFailures.map(failure => ({
@@ -57,7 +80,7 @@ export class FailureEvidenceCollector
     const timelineFailures = getTimelineFailuresFromRecords(timeline.records);
     const pipelineObservation = createPipelineObservation(detailedBuild, timeline.records ?? []);
     const helixObservations = await this.helixEvidence.collectObservations(timelineFailures, MAX_HELIX_REFERENCES);
-    const relatedFailureSummaries = await this.collectRelatedFailureEvidence(pipeline, build.id, history);
+    const relatedFailureSummaries = await this.collectRelatedFailureEvidence(pipeline, build, history, helixObservations);
     const logFailures = await this.collectTaskLogs(azure, build.id, timelineFailures);
     const taskObservations = createTaskObservations(
       timelineFailures,
@@ -66,6 +89,15 @@ export class FailureEvidenceCollector
       [pipelineObservation, ...taskObservations, ...helixObservations].filter(Boolean),
       relatedFailureSummaries,
       createBuildSummary(build)));
+    const withRecurrence = observations.map(observation =>
+    {
+      const matchingBuilds = relatedFailureSummaries.filter(summary =>
+        summary.observations?.some(previous => matchesFailure(observation, previous))).map(summary => summary.build);
+      const recurrence = {matchingBuilds, recurring: matchingBuilds.length > 0,
+        basis: observation.failureFamilyFingerprint ? "failure-family-not-root-cause" : "exact-fingerprint"};
+      return {...observation, recurrence, actionable: observation.actionable
+        && (!candidate.requiresIndependentRecurrence || recurrence.recurring)};
+    });
     return {
       pipeline,
       build: createBuildSummary(build),
@@ -73,10 +105,16 @@ export class FailureEvidenceCollector
       priority: candidate.priority ?? null,
       auditContext: candidate.auditContext ?? null,
       mergedPullRequest: candidate.mergedPullRequest ?? null,
+      targetBranch: candidate.targetBranch ?? createBuildSummary(build).targetBranch,
+      requiresIndependentRecurrence: candidate.requiresIndependentRecurrence ?? false,
+      historyCoverage: candidate.historyCoverage ?? null,
+      evidenceLimits: {relatedBuilds: MAX_RELATED_BUILDS, relatedBuildsScanned: MAX_RELATED_BUILD_SCAN,
+        currentHelixReferences: MAX_HELIX_REFERENCES, relatedHelixReferences: MAX_RELATED_HELIX_REFERENCES,
+        taskLogs: MAX_TASK_LOGS},
       recentBuilds: history.map(createBuildSummary),
-      issueCandidates: observations.filter(observation => observation.actionable),
-      contextObservations: observations.filter(observation => !observation.actionable),
-      relatedFailureSummaries: compactRelatedFailureSummaries(relatedFailureSummaries, observations),
+      issueCandidates: withRecurrence.filter(observation => observation.actionable),
+      contextObservations: withRecurrence.filter(observation => !observation.actionable),
+      relatedFailureSummaries: compactRelatedFailureSummaries(relatedFailureSummaries, withRecurrence),
       testFailures: await this.collectAzureTestFailures(azure, build.id)
     };
   }
@@ -116,6 +154,15 @@ export class FailureEvidenceCollector
   }
 }
 
+function matchesFailure(current, previous)
+{
+  return current.phase === previous.phase && current.failureType === previous.failureType
+    && (current.fingerprint === previous.fingerprint
+      || (current.kind === "test" && current.component === previous.component
+        && current.mechanismFingerprint && current.mechanismFingerprint === previous.mechanismFingerprint)
+      || (current.failureFamilyFingerprint && current.failureFamilyFingerprint === previous.failureFamilyFingerprint));
+}
+
 function deduplicateObservations(observations)
 {
   return [...new Map(observations.map(observation => [
@@ -138,20 +185,20 @@ function compactRelatedFailureSummaries(summaries, currentObservations)
 
 function observationRelevance(observation, currentObservations)
 {
-  return currentObservations.some(current => current.fingerprint === observation.fingerprint
+  return currentObservations.some(current => matchesFailure(current, observation)
     || (current.component === observation.component
-      && current.mechanismFingerprint === observation.mechanismFingerprint)) ? 1 : 0;
+      && current.mechanismFingerprint && current.mechanismFingerprint === observation.mechanismFingerprint)) ? 1 : 0;
 }
 
 function compactRelatedObservation(observation)
 {
   const {
     kind, phase, failureType, evidenceSources, component, mechanism, fingerprint,
-    mechanismFingerprint, actionable, workItem, jobId, queue, outcome, exitCode, state
+    mechanismFingerprint, failureFamilyFingerprint, actionable, workItem, jobId, queue, outcome, exitCode, state
   } = observation;
   return {
     kind, phase, failureType, evidenceSources, component,
     mechanism: normalizeEvidenceText(mechanism, MAX_RELATED_MECHANISM_CHARACTERS),
-    fingerprint, mechanismFingerprint, actionable, workItem, jobId, queue, outcome, exitCode, state
+    fingerprint, mechanismFingerprint, failureFamilyFingerprint, actionable, workItem, jobId, queue, outcome, exitCode, state
   };
 }

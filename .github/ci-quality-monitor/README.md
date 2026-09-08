@@ -16,11 +16,13 @@ job runs before the agent:
 
 1. Restore the processed-build ledger from the newest matching GitHub Actions
    cache entry.
-2. Read [`pipelines.json`](pipelines.json) and query the latest 20 completed
-   builds for each allowlisted pipeline and branch.
-3. During daily branch polling, exclude PR builds and builds already present in
-  the ledger. Event paths separately verify direct stable-branch failures and
-  final PR validation associated with a merged PR.
+2. Read [`pipelines.json`](pipelines.json). For enabled `pullRequestTargets`,
+   query bounded, paginated history across PRs and direct builds of the target;
+   other branch histories use the latest 20 completed builds.
+3. Verify build-time target metadata, skip already processed attempts, and
+   reconcile missed PR events on the daily schedule. Open PR failures require
+   independent matching evidence before AI activation. See
+   [delivery policy](DESIGN.md#delivery-paths) for bounds and bootstrap behavior.
 4. Collect bounded timeline, public Helix work-item, TRX, artifact, and log
   evidence for new failures. TRX evidence includes aggregate result counts;
   hang/crash evidence includes the active-test line, host exit code, watchdog

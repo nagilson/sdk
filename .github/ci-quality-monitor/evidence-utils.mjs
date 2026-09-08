@@ -1,4 +1,5 @@
 import {MAX_LOG_CHARACTERS} from "./constants.mjs";
+import {getBuildContext} from "./build-context.mjs";
 
 export function splitNonEmptyLines(value)
 {
@@ -49,6 +50,7 @@ export function createFailureFingerprint({phase, failureType, component, mechani
 export function createBuildSummary(build)
 {
     return {
+        ...getBuildContext(build),
         id: build.id,
         number: build.buildNumber,
         result: build.result,
