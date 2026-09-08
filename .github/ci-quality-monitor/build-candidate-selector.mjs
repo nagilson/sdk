@@ -206,9 +206,11 @@ export class BuildCandidateSelector
             const auditKey = createAuditKey(build, "stable-branch", auditContext);
             if (!isAuditProcessed(this.state, pipeline, auditKey))
             {
+              const targetHistory = (pipeline.pullRequestTargets ?? []).includes(branch)
+                ? await this.getHistory(pipeline, build) : {history};
               markAuditProcessed(this.state, pipeline, auditKey);
               candidates.push({
-                pipeline, build, history, monitoringScope: "stable-branch", priority: "HIGH", auditContext
+                pipeline, build, ...targetHistory, monitoringScope: "stable-branch", priority: "HIGH", auditContext
               });
             }
           }
