@@ -269,7 +269,9 @@ ref with a selected `build_id` and `evidence_only=true`. Inspect the
 console logs and dumps remain linked even when only bounded excerpts enter the
 agent context; omission metadata must be considered before asserting absence.
 
-To validate AI itself, dispatch with `evidence_only=false`. Fork issue writes are
-staged previews and do not dispatch Issue Monster. Check that activation, agent,
-detection, and safe outputs execute; a successful collector alone does not prove
-the AI path works. Production `dotnet/sdk` runs create real issues.
+To validate AI and issue filing, dispatch with `evidence_only=false`. This can
+create real issues in the executing repository, including a fork. Direct Issue
+Monster dispatch remains limited to `dotnet/sdk`, but separately configured fork
+automation may react to the issues. Check activation, agent, detection, safe
+outputs, and the resulting issue; a successful collector alone does not prove
+the AI path works.

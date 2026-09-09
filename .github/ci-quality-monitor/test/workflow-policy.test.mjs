@@ -83,5 +83,12 @@ test("AI admission is durable, bounded, and bypassed only for read-only evidence
     assert.match(workflow, /max-ai-credits: 25/);
     assert.match(workflow, /max-daily-ai-credits: 300/);
     assert.match(workflow, /threat-detection:\s+max-ai-credits: 5/);
-    assert.match(workflow, /staged: \$\{\{ github\.repository != 'dotnet\/sdk' \}\}/);
+});
+
+test("issue creation is not preview-only on forks", async () =>
+{
+    const workflow = await readFile(workflowUrl, "utf8");
+    const compiled = await readFile(new URL("../../workflows/ci-quality-monitor.lock.yml", import.meta.url), "utf8");
+    assert.doesNotMatch(workflow, /^\s*staged:/m);
+    assert.doesNotMatch(compiled, /\\?"staged\\?":/);
 });

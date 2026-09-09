@@ -170,6 +170,7 @@ Manual `evidence_only: true` dispatches collect and upload the dossier without A
 issue writes, or state changes. Use these on a fork and selected source ref to
 validate real historical builds. They do not bypass limits to run inference.
 For AI validation, use `evidence_only: false`: normal admission and inference run
-immediately when eligible. Fork issue outputs are staged previews, and Issue
-Monster dispatch runs only in `dotnet/sdk`, preventing validation from starting
-downstream coding agents. Production issue outputs are not staged.
+immediately when eligible. Issue outputs create real issues in the repository
+running the workflow, including forks. Direct Issue Monster dispatch remains
+limited to `dotnet/sdk`; other automation configured on a fork may still react to
+the created issues and labels.

@@ -254,7 +254,6 @@ safe-outputs:
     - "helix.dot.net"
     - "*.blob.core.windows.net"
   create-issue:
-    staged: ${{ github.repository != 'dotnet/sdk' }}
     title-prefix: "[AI discovered CI] "
     labels: [agentic-workflows, cookie, live-build-incident]
     allowed-labels: ["Known Build Error", "Test Debt"]
