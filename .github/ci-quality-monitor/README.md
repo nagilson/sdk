@@ -179,9 +179,11 @@ This prevents a lost cache and artifact checkpoint from spending AI credits or
 creating a burst of historical issues.
 
 The checkpoint contains no credentials or untrusted executable content. It is
-JSON build metadata only. Workflow concurrency queues scheduled runs under one
-group, preventing two collectors from claiming the same newly completed build
-at once.
+JSON build metadata only. Workflow concurrency queues actionable scheduled,
+Azure Pipelines check-suite, and merged-PR runs under one group, preventing two
+collectors from claiming the same newly completed build at once. Non-Azure
+check-suite events use unique groups because workflow-level concurrency is
+evaluated before the collector can discard those no-op events.
 
 ## Issue Policy
 

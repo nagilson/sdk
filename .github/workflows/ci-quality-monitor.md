@@ -18,7 +18,10 @@ on:
   permissions: {}
 
 concurrency:
-  group: ci-quality-monitor
+  # Non-Azure check suites are filtered by the collect job, but workflow-level
+  # concurrency is evaluated first. Give those high-volume no-op runs unique
+  # groups so they cannot fill the queue used by actionable monitor runs.
+  group: ci-quality-monitor-${{ github.event_name == 'check_suite' && github.event.check_suite.app.slug != 'azure-pipelines' && github.run_id || 'actionable' }}
   queue: max
 
 env:
