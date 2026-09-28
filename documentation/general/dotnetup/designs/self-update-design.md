@@ -2,8 +2,9 @@
 
 `dotnetup self update [--no-progress]` updates the published NativeAOT `dotnetup`
 executable in place. Stage A is implemented; waiting and transparent forwarding of
-ordinary commands remain Stage B work. See [Stage A Status](#stage-a-status) and
-the [review guide](#review-guide) for the source map and environment boundaries.
+ordinary commands remain Stage B work. See the [stage success criteria](self-update-stages.md),
+[algorithm](self-update-algorithm.md), and
+[implementation details](self-update-algorithm-implementations.md).
 
 The current command resolves the daily release for the selected RID. It does not
 accept a channel or version argument. See [command usage](../reference/dotnetup.md#self-update).
@@ -28,12 +29,12 @@ Because replacing the still-running destination with `MoveFileExW` cannot be rel
 
 `File.Replace(stagedPath, installedPath, backupPath)` maps to the Windows `ReplaceFileW` API. It combines replacement of the canonical path and creation of a backup in one operating-system call. Windows permits this operation while the old executable image is running when existing handles allow delete sharing; the running process continues executing the old image while future launches resolve the replacement.
 
-This avoids deliberately splitting the forward replacement into two `File.Move` calls; it does not guarantee an uninterrupted canonical name. Windows measurements observed a brief file-not-found interval even within `File.Replace`, so consumers must retry transient launch failures. It is not an ACID or power-loss-safe transaction: `ReplaceFileW` documents partial failure states, and its `REPLACEFILE_WRITE_THROUGH` flag is unsupported. The staged executable is flushed before replacement, and recovery accounts for the staged, canonical, and backup paths after failure. See [replacement properties](#properties-of-algorithms-1-and-2).
+This avoids deliberately splitting the forward replacement into two `File.Move` calls; it does not guarantee an uninterrupted canonical name. Windows measurements observed a brief file-not-found interval even within `File.Replace`, so consumers must retry transient launch failures. It is not an ACID or power-loss-safe transaction: `ReplaceFileW` documents partial failure states, and its `REPLACEFILE_WRITE_THROUGH` flag is unsupported. The staged executable is flushed before replacement, and recovery accounts for the staged, canonical, and backup paths after failure. See [replacement properties](self-update-algorithm.md#properties-of-algorithms-1-and-2).
 
 
 ### Cross Update Boundary Trade-Offs
 
-Allowing `dotnetup runtime install` to run across either replacement operation remains unsafe because old code may encounter installation state written by a newer manifest format. The activity gate described below excludes those `non-safe` processes while allowing explicitly `safe` processes to continue running.
+Allowing `dotnetup runtime install` to run across either replacement operation remains unsafe because old code may encounter installation state written by a newer manifest format. The activity gate described in the [self-update algorithm](self-update-algorithm.md#algorithm-1--lock-acquisition-and-the-non-safe-gate) excludes those `non-safe` processes while allowing explicitly `safe` processes to continue running.
 
 Existing safe processes may still change behavior if they resolve paths or load external assets after replacement, so every safe process must cache values derived from its loaded image at startup.
 

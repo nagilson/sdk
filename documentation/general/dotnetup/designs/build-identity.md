@@ -1,7 +1,7 @@
 # Dotnetup Build Identity
 
 `dotnetup --build-identity` is the implemented, hidden root option used by
-[self-update verification](self-update.md#stage-a-status). It reports the loaded
+[self-update verification](self-update-algorithm-implementations.md). It reports the loaded
 executable's identity without entering the command gate or starting telemetry.
 
 ## Contract
