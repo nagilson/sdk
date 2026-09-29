@@ -34,6 +34,8 @@ This project has adopted the [.NET Foundation Code of Conduct](https://dotnetfou
 
 ## How do I build the SDK?
 
+Building this repository produces a local SDK.
+
 Start with the [Developer Guide](documentation/project-docs/developer-guide.md).
 
 ## How do I test an SDK I have built?
