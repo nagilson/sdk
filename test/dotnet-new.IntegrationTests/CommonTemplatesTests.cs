@@ -437,7 +437,7 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
             {
                 new DotnetBuildCommand(_log, "MyProject")
                     .WithWorkingDirectory(workingDir)
-                    .Execute("/p:CheckEolTargetFramework=false")
+                    .Execute("--disable-build-servers", "/p:CheckEolTargetFramework=false")
                     .Should()
                     .Pass()
                     .And.NotHaveStdErr();
