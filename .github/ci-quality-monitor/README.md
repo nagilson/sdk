@@ -20,9 +20,7 @@ job runs before the agent:
    builds for each allowlisted pipeline and branch.
 3. During daily branch polling, exclude PR builds and builds already present in
   the ledger. Event paths separately verify direct stable-branch failures and
-  final PR validation associated with a merged PR. Merged-PR delivery runs in
-  trusted base-repository context; collector code is always checked out from
-  `main`, while the sandboxed agent checks out the PR's allowlisted target branch.
+  final PR validation associated with a merged PR.
 4. Collect bounded timeline, public Helix work-item, TRX, artifact, and log
   evidence for new failures. TRX evidence includes aggregate result counts;
   hang/crash evidence includes the active-test line, host exit code, watchdog
@@ -62,6 +60,11 @@ The workflow runs one daily routine and can be dispatched manually with a public
 Azure DevOps build ID. The daily routine reconciles stable-branch events and
 heartbeat state. Manual dispatch ignores the processed-build ledger for the
 selected build, which makes repeatable validation possible.
+
+Merged-PR delivery uses `pull_request_target` so protected environments evaluate
+the trusted base branch instead of `refs/pull/<number>/merge`. Both generated
+and explicit checkouts are restricted to the workflow repository in the
+base-branch context; pull request head code is never checked out or executed.
 
 ## Public Data Boundary
 

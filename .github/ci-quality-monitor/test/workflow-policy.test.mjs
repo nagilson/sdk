@@ -20,7 +20,9 @@ test("created issues are dispatched directly to Issue Monster", async () =>
     assert.match(workflow, /actions: write/);
     assert.match(workflow, /needs\.safe_outputs\.outputs\.created_issue_number/);
     assert.match(workflow, /needs\.safe_outputs\.outputs\.process_safe_outputs_temporary_id_map/);
+    assert.match(workflow, /github-token: \$\{\{ secrets\.GH_AW_GITHUB_TOKEN \|\| secrets\.GITHUB_TOKEN \}\}/);
     assert.match(workflow, /dispatchCreatedIssues/);
+    assert.doesNotMatch(workflow, /if: needs\.safe_outputs\.outputs\.created_issue_number != ''/);
 });
 
 test("named test assertions require the recurring KBE gate", async () =>
@@ -57,14 +59,15 @@ test("failed Azure check suites trigger build ID resolution", async () =>
     assert.match(workflow, /resolveAzureBuildId\(checks\)/);
 });
 
-test("merged pull requests run from trusted main and pass stable-target metadata", async () =>
+test("merged pull requests pass stable-target metadata to the collector", async () =>
 {
     const workflow = await readFile(workflowUrl, "utf8");
 
     assert.match(workflow, /pull_request_target:\s*\n\s*types: \[closed\]/);
-    assert.match(workflow, /permissions: \{\}\s*\n\s*needs: \[collect\]/);
-    assert.match(workflow, /name: Check out monitor configuration[\s\S]*ref: main/);
-    assert.match(workflow, /checkout:[\s\S]*ref: \$\{\{ github\.event\.pull_request\.base\.ref \}\}/);
+    assert.doesNotMatch(workflow, /^\s*pull_request:\s*$/m);
+    assert.match(workflow, /Never check out or execute PR code\./);
+    assert.match(workflow, /checkout:\s*\n\s*repository: \$\{\{ github\.repository \}\}/);
+    assert.match(workflow, /job-discriminator: \$\{\{ github\.run_id \}\}/);
     assert.match(workflow, /github\.event\.pull_request\.merged == true/);
     assert.match(workflow, /MERGED_PR_NUMBER: \$\{\{ github\.event\.pull_request\.number \}\}/);
     assert.match(workflow, /MERGED_PR_BASE_REF: \$\{\{ github\.event\.pull_request\.base\.ref \}\}/);

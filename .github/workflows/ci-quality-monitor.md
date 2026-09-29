@@ -6,6 +6,8 @@ description: Investigates public dotnet/sdk CI failures and identifies actionabl
 on:
   check_suite:
     types: [completed]
+  # Use the base-branch context so protected agent environments do not reject
+  # the synthetic refs/pull/<number>/merge ref. Never check out or execute PR code.
   pull_request_target:
     types: [closed]
   schedule: daily
@@ -16,11 +18,19 @@ on:
         required: false
         type: string
   permissions: {}
-  needs: [collect]
+
+checkout:
+  repository: ${{ github.repository }}
 
 concurrency:
-  group: ci-quality-monitor
+  # GitHub evaluates workflow concurrency before any job-level `if`. Give
+  # irrelevant check suites and unmerged PR closures unique groups so they
+  # cannot fill the monitor queue before `collect` skips them. Use a new group
+  # for actionable runs to leave the existing, permanently blocked queue
+  # behind.
+  group: ${{ ((((github.event_name == 'check_suite' && github.event.check_suite.app.slug == 'azure-pipelines' && github.event.check_suite.conclusion != 'success') || (github.event_name == 'pull_request_target' && github.event.pull_request.merged == true) || (github.event_name != 'check_suite' && github.event_name != 'pull_request_target')) && 'ci-quality-monitor-v2') || format('ci-quality-monitor-skip-{0}', github.run_id)) }}
   queue: max
+  job-discriminator: ${{ github.run_id }}
 
 env:
   DOTNET_CLI_TELEMETRY_SESSIONID: gha-${{ github.repository_id }}-${{ github.run_id }}-${{ github.run_attempt }}
@@ -47,7 +57,7 @@ jobs:
       - name: Check out monitor configuration
         uses: actions/checkout@v7.0.1
         with:
-          ref: main
+          repository: ${{ github.repository }}
       - name: Resolve Azure build from completed check suite
         if: github.event_name == 'check_suite'
         id: resolve-check-suite
@@ -162,13 +172,18 @@ jobs:
         with:
           persist-credentials: false
       - name: Dispatch Issue Monster for created issues
-        if: needs.safe_outputs.outputs.created_issue_number != ''
         uses: actions/github-script@v9.0.0
         env:
+          # gh-aw exports only the first issue directly; the map contains all
+          # created issues when create-issue produces up to its configured max.
           CREATED_ISSUE_NUMBER: ${{ needs.safe_outputs.outputs.created_issue_number }}
           CREATED_ISSUE_MAP: ${{ needs.safe_outputs.outputs.process_safe_outputs_temporary_id_map }}
           TARGET_REF: ${{ github.ref_name }}
         with:
+          # Match Issue Monster's dispatch-workflow Safe Output authentication.
+          # The selected Copilot pool PAT is inference-only; GH_AW_GITHUB_TOKEN
+          # carries the Actions write permission needed on dotnet/sdk.
+          github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
             const { dispatchCreatedIssues } = require("./.github/ci-quality-monitor/issue-monster-dispatch.js");
             await dispatchCreatedIssues({
@@ -179,6 +194,7 @@ jobs:
               createdIssueNumberInput: process.env.CREATED_ISSUE_NUMBER,
               ref: process.env.TARGET_REF,
             });
+
 if: needs.collect.outputs.should_run == 'true'
 
 # ###############################################################
@@ -194,10 +210,6 @@ imports:
       environment: copilot-pat-pool
 
 environment: copilot-pat-pool
-
-checkout:
-  repository: ${{ github.repository }}
-  ref: ${{ github.event.pull_request.base.ref }}
 
 model: gpt-5.6-luna
 
