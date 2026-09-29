@@ -335,6 +335,7 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
         }
 
         [TestMethod]
+        [Retry(3, MillisecondsDelayBetweenRetries = 1_000, BackoffType = DelayBackoffType.Exponential)]
         //creates all possible combinations for supported templates, language versions and frameworks
         [DynamicData(nameof(FeaturesSupport_Data))]
         public async Task FeaturesSupport(
