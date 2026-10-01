@@ -253,7 +253,7 @@ internal class DotnetDownloader : IArchiveDownloader
         op.Tag("download.bytes", fileInfo.Length);
         op.Tag("download.from_cache", false);
 
-        try { _downloadCache.AddToCache(downloadUrl, destinationPath); }
+        try { _downloadCache.AddToCache(downloadUrl, destinationPath, preferHardLink: !download.IsDotnetup); }
         catch { /* Ignore errors adding to cache - it's not critical */ }
 
         return destinationPath;
@@ -518,7 +518,7 @@ internal class DotnetDownloader : IArchiveDownloader
         string tempPath = $"{destinationPath}.download";
         try
         {
-            File.Copy(cachedFilePath, tempPath, overwrite: true);
+            _downloadCache.MaterializeFile(cachedFilePath, tempPath, preferHardLink: !download.IsDotnetup);
             VerifyFileHash(tempPath, download.ExpectedHash, allowAlternateHashes: !download.IsDotnetup);
             CommitDownload(tempPath, destinationPath);
 
