@@ -49,6 +49,7 @@ internal static class ErrorCategoryClassifier
             DotnetInstallErrorCode.InstallerFailed => ErrorCategory.Product,
             DotnetInstallErrorCode.InstallerPostInstallVerificationFailed => ErrorCategory.Product,
             DotnetInstallErrorCode.WrongInstallerFileExtension => ErrorCategory.Product,
+            DotnetInstallErrorCode.InstallerTimedOut => ErrorCategory.Product,
 
             // Product errors - issues we can take action on
             DotnetInstallErrorCode.ExtractionFailed => ErrorCategory.Product,

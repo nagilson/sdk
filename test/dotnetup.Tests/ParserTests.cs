@@ -1,7 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Microsoft.DotNet.Tools.Bootstrapper;
+using Microsoft.DotNet.Tools.Bootstrapper.Commands.Runtime.Install;
+using Microsoft.DotNet.Tools.Bootstrapper.Commands.Sdk.Install;
+using Microsoft.DotNet.Tools.Bootstrapper.WindowsInstaller;
 
 namespace Microsoft.DotNet.Tools.Dotnetup.Tests;
 
@@ -527,6 +531,90 @@ public class ParserTests
         parseResult.Errors.Should().BeEmpty();
         parseResult.GetValue(CommonOptions.UntrackedOption).Should().BeTrue();
     }
+
+    #endregion
+
+    #region Installer Timeout Option Parser Tests
+
+    [TestMethod]
+    [DataRow(new[] { "sdk", "install", "9.0", "--installer-timeout", "25" })]
+    [DataRow(new[] { "install", "9.0", "--installer-timeout", "25" })]
+    [DataRow(new[] { "runtime", "install", "aspnetcore@9.0", "--installer-timeout", "25" })]
+    public void Parser_InstallerTimeout_ParsesOnInstallCommands(string[] args)
+    {
+        var parseResult = Parser.Parse(args);
+
+        parseResult.Errors.Should().BeEmpty();
+        parseResult.GetValue(CommonOptions.InstallerTimeoutOption).Should().Be(25);
+    }
+
+    [TestMethod]
+    public void Parser_InstallerTimeout_DefaultsToTenMinutes()
+    {
+        var parseResult = Parser.Parse(["sdk", "install", "9.0"]);
+
+        parseResult.Errors.Should().BeEmpty();
+        parseResult.GetValue(CommonOptions.InstallerTimeoutOption).Should().Be(10);
+        new SdkInstallCommand(parseResult).InstallerTimeout.Should().Be(TimeSpan.FromMinutes(10));
+    }
+
+    [TestMethod]
+    public void Parser_InstallerTimeout_FlowsToInstallCommand()
+    {
+        var parseResult = Parser.Parse(["runtime", "install", "9.0", "--installer-timeout", "45"]);
+
+        new RuntimeInstallCommand(parseResult).InstallerTimeout.Should().Be(TimeSpan.FromMinutes(45));
+    }
+
+    [TestMethod]
+    [DataRow("1")]
+    [DataRow("1440")]
+    public void Parser_InstallerTimeout_AcceptsBoundaries(string value)
+    {
+        Parser.Parse(["sdk", "install", "--installer-timeout", value]).Errors.Should().BeEmpty();
+    }
+
+    [TestMethod]
+    [DataRow("0")]
+    [DataRow("-5")]
+    [DataRow("1441")]
+    public void Parser_InstallerTimeout_RejectsOutOfRange(string value)
+    {
+        var parseResult = Parser.Parse(["sdk", "install", "--installer-timeout", value]);
+
+        parseResult.Errors.Should().ContainSingle()
+            .Which.Message.Should().Contain("--installer-timeout").And.Contain("1440");
+    }
+
+    [TestMethod]
+    [DataRow("ten")]
+    [DataRow("1.5")]
+    [DataRow("00:10:00")]
+    public void Parser_InstallerTimeout_RejectsNonInteger(string value)
+    {
+        Parser.Parse(["sdk", "install", "--installer-timeout", value]).Errors.Should().NotBeEmpty();
+    }
+
+    [TestMethod]
+    public void Parser_InstallerTimeout_IsNotOnUninstall()
+    {
+        Parser.Parse(["sdk", "uninstall", "9.0", "--installer-timeout", "5"]).Errors.Should().NotBeEmpty();
+    }
+
+    [TestMethod]
+    public void Parser_InstallerTimeout_HelpDescribesCancelGraceAndTermination()
+    {
+        string description = CommonOptions.InstallerTimeoutOption.Description!;
+
+        description.Should().Contain("10")
+            .And.Contain(((int)BundleProcessRunner.GracePeriod.TotalSeconds).ToString(CultureInfo.InvariantCulture))
+            .And.Contain("roll")
+            .And.Contain("terminates");
+    }
+
+    #endregion
+
+    #region Bare dotnetup
 
     [TestMethod]
     public void Parser_BareDotnetup_BindsInteractiveOption()

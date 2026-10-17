@@ -28,6 +28,9 @@ internal abstract class InstallCommand : CommandBase
     public bool DryRun { get; }
     public IEnvShellProvider? ShellProvider { get; }
     public bool MigrateFromSystem { get; }
+
+    /// <summary>How long a Windows installer bundle may run in admin mode; see <see cref="CommonOptions.InstallerTimeoutOption"/>.</summary>
+    public TimeSpan InstallerTimeout { get; }
     public virtual bool UpdateGlobalJson => false;
     public virtual IReadOnlyCollection<InstallComponent> MigrationComponents => [];
 
@@ -48,6 +51,11 @@ internal abstract class InstallCommand : CommandBase
         ShellProvider = parseResult.GetValue(CommonOptions.ShellOption);
         MigrateFromSystem = parseResult.GetValue(CommonOptions.MigrateFromSystemOption);
 
+        // Commands that don't register the option (such as init) never use the installer bundle, so they get the default.
+        InstallerTimeout = parseResult.GetResult(CommonOptions.InstallerTimeoutOption) is not null
+            ? TimeSpan.FromMinutes(parseResult.GetValue(CommonOptions.InstallerTimeoutOption))
+            : InstallRequestOptions.DefaultInstallerTimeout;
+
         DotnetEnvironment = new DotnetEnvironmentManager();
     }
 
@@ -60,6 +68,7 @@ internal abstract class InstallCommand : CommandBase
                 CommonOptions.InteractiveOption,
                 CommonOptions.NoProgressOption,
                 CommonOptions.VerbosityOption,
+                CommonOptions.InstallerTimeoutOption,
                 SdkInstallCommandParser.ChannelArguments,
                 RuntimeInstallCommandParser.ComponentSpecsArgument);
 }

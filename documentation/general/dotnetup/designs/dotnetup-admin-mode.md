@@ -94,6 +94,8 @@ Commands are blocked by default: a command runs in `admin` mode only when its co
 
 `--untracked` must also be provided in `admin` mode, at least in the MVP stage.
 
+`--installer-timeout` is supported in `admin` mode; see [Installer Timeout](#installer-timeout).
+
 `--install-directory` will remain unsupported as MSI based installation will only ever install to the expected system managed, shared directory.
 
 `--muxer` related replacement commands or configuration is not controllable for MSI installs so this flag will cause failure if it is applied under `admin` mode, similar to `--install-directory`, meaning `dotnet` must NOT be in use to have `admin` installs succeed.
@@ -260,7 +262,19 @@ Before running an installer, `dotnetup` verifies its SHA-512 hash (from the sign
 
 The installer bundles request `asInvoker`, so `dotnetup` starts them without elevation using `/install /quiet /norestart`, and each bundle raises its own UAC prompt. `dotnetup` itself is never elevated to install. Installers run one at a time, so prompts never overlap.
 
-There is no timeout in the MVP. Ctrl+C does not stop a running installer; `dotnetup` waits for it to finish and reports its real result, then starts no further installers in the batch and reports each remaining install as cancelled (`OperationCancelled`).
+Ctrl+C does not stop a running installer (Burn is a GUI-subsystem process and does not receive console control events); `dotnetup` waits for it to finish or for the installer timeout below, and reports its real result, then starts no further installers in the batch and reports each remaining install as cancelled (`OperationCancelled`).
+
+### Installer Timeout
+
+`sdk install`, `runtime install`, and `install` accept `--installer-timeout <MINUTES>` (default `10`, valid range 1-1440; also allowed in `admin` mode). It bounds how long `dotnetup` waits for each installer bundle; archive installs ignore it. It is a command-line option for now and may later be stored in the `dotnetup` configuration. When the timeout elapses:
+
+1. `dotnetup` asks the bundle to cancel by posting `WM_CLOSE` to the hidden window of class `WixStdBA` owned by the bundle's process or one of its descendants. WiX v6 bundles (the runtime bundles) host the bootstrapper application in a `wixstdba.exe` child of the Burn engine; WiX v5 bundles (the SDK bundle) may host it in the engine itself. Under `/quiet`, wixstdba's `OnClose` cancels without prompting and, while applying, keeps running so that rollback can occur; every later engine callback returns cancel, and during the elevated MSI phase the cancel reaches Windows Installer, which rolls back. The engine exits with `1602` and removes its extracted files. `Process.CloseMainWindow` must not be used: it targets the engine's `WixBurnMessageWindow`, which does not cancel, and destroys the window Burn uses for `WM_QUERYENDSESSION`.
+2. Burn acts on the cancel only at its next callback, and rolling back a large MSI chain takes time, so the installer gets a grace period of 120 seconds to exit. Any exit code other than success after the cancel request is reported as `InstallerTimedOut` (not `OperationCancelled` or `InstallerFailed`); a success exit code during the grace period means the install finished and is treated as success.
+3. If the installer has not exited, `dotnetup` kills its process tree and stops waiting, so `dotnetup` returns within the timeout plus the grace period plus a 10-second wait for termination. This is a last resort that may not stop the installation: the elevated Burn engine, started by the unelevated engine with `runas`, cannot be killed by an unelevated `dotnetup`. Once its parent is killed it is orphaned, finishes any in-flight `MsiInstallProduct` without rolling back, and skips Burn's unregistration, so running the same bundle again resumes or repairs the installation. Killing also leaves the engine's extracted files in `%TEMP%`. The `InstallerTimedOut` message tells the user that the installer may still be running in the background, to wait for it, and then to run the same command again or repair the installation. A new installer started while the orphaned one is still running fails with `1618` (`InstallerBusy`).
+
+Each bundle install holds the install-state mutex while its installer runs. For bundle requests, the mutex wait (both before downloading and before committing) is therefore derived from the installer timeout: the timeout plus the grace period plus the termination wait plus a 2-minute margin, and never less than the default 10-minute wait. Installs in an `admin` batch share one timeout, and commits are sequential, so no further coordination is needed.
+
+Not yet verified on a machine: install-mode behavior with the elevated companion, both for the graceful cancel during the MSI phase and for the forced kill.
 
 https://github.com/dotnet/vscode-dotnet-runtime/blob/f54c68789e1bdfca13e8262045cb41ca6a32aa82/vscode-dotnet-runtime-library/src/Acquisition/WinMacGlobalInstaller.ts#L102 common exit codes are already wrapped into specific user-facing messages that can be translated into `dotnetup` `user` failures. The MVP maps them as follows:
 
@@ -273,6 +287,7 @@ https://github.com/dotnet/vscode-dotnet-runtime/blob/f54c68789e1bdfca13e8262045c
 | `740` | The installer requires elevation (`InstallerFailed`). |
 | Any other nonzero code, including `1603` | `InstallerFailed`, reporting the exit code. No retry. |
 | Installer did not start | `ProcessStartFailed`. |
+| Installer did not finish within `--installer-timeout` | `InstallerTimedOut` (see [Installer Timeout](#installer-timeout)). |
 
 After a successful exit, `dotnetup` confirms that the requested version is installed and otherwise fails with `InstallerPostInstallVerificationFailed`.
 

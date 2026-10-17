@@ -41,6 +41,7 @@ derive one, it uses `latest`.
 | `-v`, `--verbosity <normal\|detailed>` | Set output verbosity. The default is `normal`. |
 | `--require-muxer-update [<true\|false>]` | Fail if the command cannot update the `dotnet` executable. By default, installation continues with a warning. |
 | `--untracked [<true\|false>]` | Install without adding a manifest record. |
+| `--installer-timeout <MINUTES>` | In admin mode, the number of minutes to wait for each Windows installer (default `10`, from `1` to `1440`). When the timeout elapses, `dotnetup` asks the installer to cancel, which rolls back its changes, and waits up to 120 seconds for the rollback. If the installer has not exited by then, `dotnetup` forcibly terminates it and stops waiting; part of the installer may keep running in the background, and the installation may need to be repaired by running the command again. Archive installs ignore this option. |
 | `-?`, `-h`, `--help` | Show command help. |
 
 ## Examples

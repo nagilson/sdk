@@ -361,6 +361,72 @@ public class WindowsBundleArtifactTests : IDisposable
     }
 
     [TestMethod]
+    public void Commit_PassesInstallerTimeoutToRunner()
+    {
+        var runner = new FakeRunner(exitCode: 0);
+        var artifact = CreateArtifact(StableChannel, runner: runner, installerTimeout: TimeSpan.FromMinutes(25));
+        artifact.Prepare();
+
+        artifact.Commit();
+
+        runner.Calls.Should().ContainSingle().Which.Timeout.Should().Be(TimeSpan.FromMinutes(25));
+    }
+
+    [TestMethod]
+    public void Commit_DefaultInstallerTimeout_IsTenMinutes()
+    {
+        var runner = new FakeRunner(exitCode: 0);
+        var artifact = CreateArtifact(StableChannel, runner: runner);
+        artifact.Prepare();
+
+        artifact.Commit();
+
+        runner.Calls.Should().ContainSingle().Which.Timeout.Should().Be(TimeSpan.FromMinutes(10));
+    }
+
+    [TestMethod]
+    [DataRow(1602)]
+    [DataRow(1603)]
+    public void Commit_CancelledAfterTimeout_ThrowsInstallerTimedOutWithExitCode(int exitCode)
+    {
+        var runner = new FakeRunner(exitCode) { Outcome = BundleRunOutcome.StoppedAfterTimeout };
+        var artifact = CreateArtifact(StableChannel, runner: runner, installerTimeout: TimeSpan.FromMinutes(7));
+        artifact.Prepare();
+
+        var ex = Assert.ThrowsExactly<DotnetInstallException>(artifact.Commit);
+
+        ex.ErrorCode.Should().Be(DotnetInstallErrorCode.InstallerTimedOut);
+        ex.Message.Should().Contain("7").And.Contain(exitCode.ToString(CultureInfo.InvariantCulture)).And.Contain("--installer-timeout");
+    }
+
+    [TestMethod]
+    [DataRow(0)]
+    [DataRow(3010)]
+    public void Commit_InstallerSucceedsDuringGracePeriod_Succeeds(int exitCode)
+    {
+        var runner = new FakeRunner(exitCode) { Outcome = BundleRunOutcome.StoppedAfterTimeout };
+        var artifact = CreateArtifact(StableChannel, runner: runner);
+        artifact.Prepare();
+
+        artifact.Commit();
+    }
+
+    [TestMethod]
+    [DataRow(BundleRunOutcome.TerminatedAfterTimeout)]
+    [DataRow(BundleRunOutcome.TerminationFailed)]
+    internal void Commit_ForceStoppedAfterTimeout_ThrowsInstallerTimedOutMentioningBackgroundInstaller(BundleRunOutcome outcome)
+    {
+        var runner = new FakeRunner(exitCode: 0) { Outcome = outcome };
+        var artifact = CreateArtifact(StableChannel, runner: runner, installerTimeout: TimeSpan.FromMinutes(3));
+        artifact.Prepare();
+
+        var ex = Assert.ThrowsExactly<DotnetInstallException>(artifact.Commit);
+
+        ex.ErrorCode.Should().Be(DotnetInstallErrorCode.InstallerTimedOut);
+        ex.Message.Should().Contain("3 minutes").And.Contain("background").And.Contain("run the same command again");
+    }
+
+    [TestMethod]
     [OSCondition(OperatingSystems.Windows)]
     public void Commit_BundleIsLockedAgainstWriteAndDeleteWhileInstallerRuns()
     {
@@ -446,11 +512,16 @@ public class WindowsBundleArtifactTests : IDisposable
         IsUnsigned = isUnsigned,
     };
 
-    private static DotnetInstallRequest CreateRequest(string channel) => new(
+    private static DotnetInstallRequest CreateRequest(string channel, TimeSpan? installerTimeout = null) => new(
         new DotnetInstallRoot(Path.Combine(Path.GetTempPath(), "dotnetup-bundle-root-unused"), InstallArchitecture.x64),
         new UpdateChannel(channel),
         InstallComponent.SDK,
-        new InstallRequestOptions { Untracked = true, InstallMechanism = InstallMechanism.WindowsInstallerBundle });
+        new InstallRequestOptions
+        {
+            Untracked = true,
+            InstallMechanism = InstallMechanism.WindowsInstallerBundle,
+            InstallerTimeout = installerTimeout ?? InstallRequestOptions.DefaultInstallerTimeout,
+        });
 
     private static InstallerOrchestratorSingleton.PreparedInstall Prepare(WindowsBundleArtifact artifact, string channel)
     {
@@ -473,10 +544,11 @@ public class WindowsBundleArtifactTests : IDisposable
         FakeRunner? runner = null,
         TextWriter? notices = null,
         InstallBatchContext? batchContext = null,
-        bool isPrivilegedProcess = false)
+        bool isPrivilegedProcess = false,
+        TimeSpan? installerTimeout = null)
     {
         var artifact = new WindowsBundleArtifact(
-            CreateRequest(channel),
+            CreateRequest(channel, installerTimeout),
             new ReleaseVersion("10.0.100"),
             batchContext ?? new InstallBatchContext(_reporter, 8),
             downloader ?? CreateDownloader(),
@@ -501,23 +573,28 @@ public class WindowsBundleArtifactTests : IDisposable
 
     private sealed class FakeRunner(int exitCode) : IBundleProcessRunner
     {
-        public List<(string Path, IReadOnlyList<string> Arguments)> Calls { get; } = [];
+        public List<(string Path, IReadOnlyList<string> Arguments, TimeSpan Timeout)> Calls { get; } = [];
 
         public Action<string>? OnRun { get; init; }
 
         /// <summary>Simulates the user pressing Ctrl+C while the installer runs.</summary>
         public bool RequestCancellation { get; init; }
 
-        public int Run(string bundlePath, IReadOnlyList<string> arguments, Action onCancelRequested)
+        /// <summary>How the simulated run ends; defaults to the installer exiting on its own.</summary>
+        public BundleRunOutcome Outcome { get; init; } = BundleRunOutcome.Exited;
+
+        public BundleRunResult Run(string bundlePath, IReadOnlyList<string> arguments, TimeSpan timeout, Action onCancelRequested)
         {
-            Calls.Add((bundlePath, arguments));
+            Calls.Add((bundlePath, arguments, timeout));
             if (RequestCancellation)
             {
                 onCancelRequested();
             }
 
             OnRun?.Invoke(bundlePath);
-            return exitCode;
+            return Outcome is BundleRunOutcome.Exited or BundleRunOutcome.StoppedAfterTimeout
+                ? new BundleRunResult(Outcome, exitCode)
+                : new BundleRunResult(Outcome, ExitCode: null);
         }
     }
 }

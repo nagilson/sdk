@@ -92,6 +92,15 @@ internal record InstallRequestOptions()
     /// admin mode requests use <see cref="InstallMechanism.WindowsInstallerBundle"/>.
     /// </summary>
     public InstallMechanism InstallMechanism { get; init; } = InstallMechanism.Archive;
+
+    /// <summary>The default for <see cref="InstallerTimeout"/>.</summary>
+    public static TimeSpan DefaultInstallerTimeout { get; } = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// How long a <see cref="InstallMechanism.WindowsInstallerBundle"/> install may run before dotnetup stops the
+    /// installer. Corresponds to the <c>--installer-timeout</c> CLI option. Archive installs ignore it.
+    /// </summary>
+    public TimeSpan InstallerTimeout { get; init; } = DefaultInstallerTimeout;
 }
 
 /// <summary>

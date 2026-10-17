@@ -2,9 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
+using System.Globalization;
 using Microsoft.Dotnet.Installation.Internal;
 using Microsoft.DotNet.Tools.Bootstrapper.Commands.Runtime.Install;
 using Microsoft.DotNet.Tools.Bootstrapper.Shell;
+using Microsoft.DotNet.Tools.Bootstrapper.WindowsInstaller;
 using System.CommandLine.Completions;
 
 namespace Microsoft.DotNet.Tools.Bootstrapper;
@@ -131,6 +133,26 @@ internal class CommonOptions
         Arity = ArgumentArity.ZeroOrOne
     };
 
+    /// <summary>The largest accepted <see cref="InstallerTimeoutOption"/> value (one day).</summary>
+    public const int MaximumInstallerTimeoutMinutes = 24 * 60;
+
+    /// <summary>
+    /// Minutes the Windows installer bundle may run in admin mode before dotnetup stops it.
+    /// Archive installs ignore it.
+    /// </summary>
+    public static readonly Option<int> InstallerTimeoutOption = new("--installer-timeout")
+    {
+        HelpName = "MINUTES",
+        Description = string.Format(
+            CultureInfo.CurrentCulture,
+            Strings.InstallerTimeoutOptionDescription,
+            (int)InstallRequestOptions.DefaultInstallerTimeout.TotalMinutes,
+            (int)BundleProcessRunner.GracePeriod.TotalSeconds),
+        Arity = ArgumentArity.ExactlyOne,
+        DefaultValueFactory = _ => (int)InstallRequestOptions.DefaultInstallerTimeout.TotalMinutes,
+        Validators = { ValidateInstallerTimeout },
+    };
+
     public static void AddUninstallOptions(Command command)
     {
         command.Options.Add(SourceOption);
@@ -227,6 +249,21 @@ internal class CommonOptions
 
     private static bool IsCIEnvironmentOrRedirected() =>
         new Cli.Telemetry.CIEnvironmentDetectorForTelemetry().IsCIEnvironment() || Console.IsOutputRedirected;
+
+    private static void ValidateInstallerTimeout(System.CommandLine.Parsing.OptionResult optionResult)
+    {
+        // Non-numeric values are reported by the option's int conversion.
+        if (optionResult.Tokens is [var token]
+            && int.TryParse(token.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int minutes)
+            && minutes is < 1 or > MaximumInstallerTimeoutMinutes)
+        {
+            optionResult.AddError(string.Format(
+                CultureInfo.CurrentCulture,
+                Strings.InstallerTimeoutOutOfRange,
+                optionResult.Option.Name,
+                MaximumInstallerTimeoutMinutes));
+        }
+    }
 
     private static Action<System.CommandLine.Parsing.OptionResult> ValidateShellOption()
     {

@@ -27,6 +27,15 @@ public class ScopedMutex : IDisposable
     private static int s_processActiveHolds;
 
     public ScopedMutex(string name)
+        : this(name, TimeSpan.FromSeconds(TimeoutSeconds))
+    {
+    }
+
+    /// <summary>
+    /// Acquires the mutex, waiting up to <paramref name="timeout"/> when another holder has it.
+    /// Use this overload when the holder may legitimately keep the mutex longer than <see cref="TimeoutSeconds"/>.
+    /// </summary>
+    public ScopedMutex(string name, TimeSpan timeout)
     {
         Name = name;
 
@@ -67,10 +76,10 @@ public class ScopedMutex : IDisposable
                 }
 
                 // Now wait for the full timeout
-                if (!_mutex.WaitOne(TimeSpan.FromSeconds(TimeoutSeconds), false))
+                if (!_mutex.WaitOne(timeout, false))
                 {
                     _mutex.Dispose();
-                    throw new TimeoutException($"Could not acquire mutex '{name}' within {TimeoutSeconds} seconds.");
+                    throw new TimeoutException($"Could not acquire mutex '{name}' within {timeout.TotalSeconds:0} seconds.");
                 }
             }
         }

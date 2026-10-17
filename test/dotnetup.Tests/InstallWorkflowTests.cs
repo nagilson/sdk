@@ -205,7 +205,20 @@ public class InstallWorkflowTests : IDisposable
         InstallPathClassifier.IsAdminInstallPath(request.InstallRoot.Path).Should().BeTrue();
         request.Options.Untracked.Should().BeTrue();
         request.Options.InstallMechanism.Should().Be(InstallMechanism.WindowsInstallerBundle);
+        request.Options.InstallerTimeout.Should().Be(InstallRequestOptions.DefaultInstallerTimeout);
         File.Exists(Path.Combine(_tempDir, "manifest.json")).Should().BeFalse();
+    }
+
+    [TestMethod]
+    [OSCondition(OperatingSystems.Windows)]
+    public void GenerateInstallRequests_AdminModeWithInstallerTimeout_PlumbsTimeoutToRequest()
+    {
+        UseAdminMode();
+        var workflow = new InstallWorkflow(new SdkInstallCommand(Parser.Parse(["sdk", "install", "9.0.100", "--untracked", "--installer-timeout", "30"])));
+
+        var requests = workflow.GenerateInstallRequests([new MinimalInstallSpec(InstallComponent.SDK, "9.0.100")]);
+
+        requests.Should().ContainSingle().Which.Request.Options.InstallerTimeout.Should().Be(TimeSpan.FromMinutes(30));
     }
 
     [TestMethod]

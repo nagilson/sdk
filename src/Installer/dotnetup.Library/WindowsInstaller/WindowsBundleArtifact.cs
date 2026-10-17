@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.ComponentModel;
+using System.Globalization;
 using System.Security.Cryptography;
 using Microsoft.Deployment.DotNet.Releases;
 using Microsoft.Dotnet.Installation.Internal;
@@ -107,7 +108,7 @@ internal sealed class WindowsBundleArtifact : IInstallArtifact
         var installTask = _progress.BeginExtraction();
 
         EnsureTrustedSignature(download);
-        HandleExitCode(RunInstaller(download.Path));
+        HandleRunResult(RunInstaller(download.Path));
 
         installTask.Value = installTask.MaxValue;
         _progress.CompleteExtraction(installTask);
@@ -234,11 +235,11 @@ internal sealed class WindowsBundleArtifact : IInstallArtifact
     private static bool IsUnsignedSourceAllowed(VerifiedDownload download) =>
         download.IsUnsigned && !UnsignedSourcePolicy.IsUnsignedDownloadBlocked();
 
-    private int RunInstaller(string bundlePath)
+    private BundleRunResult RunInstaller(string bundlePath)
     {
         try
         {
-            return _processRunner.Run(bundlePath, InstallArguments, _batchContext.RequestCancellation);
+            return _processRunner.Run(bundlePath, InstallArguments, _request.Options.InstallerTimeout, _batchContext.RequestCancellation);
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or IOException or PlatformNotSupportedException)
         {
@@ -247,6 +248,34 @@ internal sealed class WindowsBundleArtifact : IInstallArtifact
                 $"Could not start the installer for {Describe()}: {ex.Message}",
                 ex);
         }
+    }
+
+    private void HandleRunResult(BundleRunResult result)
+    {
+        // An installer asked to stop may still finish successfully during the grace period; that install is complete.
+        if (result.Outcome == BundleRunOutcome.Exited
+            || (result.Outcome == BundleRunOutcome.StoppedAfterTimeout && IsSuccess(result.ExitCode!.Value)))
+        {
+            HandleExitCode(result.ExitCode!.Value);
+            return;
+        }
+
+        throw CreateTimeoutException(result);
+    }
+
+    private static bool IsSuccess(int exitCode) =>
+        BundleExitCodes.Classify(exitCode) is BundleExitOutcome.Success or BundleExitOutcome.SuccessRestartRequired;
+
+    private DotnetInstallException CreateTimeoutException(BundleRunResult result)
+    {
+        string timeout = BundleProcessRunner.FormatMinutes(_request.Options.InstallerTimeout);
+        string message = result.Outcome == BundleRunOutcome.StoppedAfterTimeout
+            ? string.Format(
+                CultureInfo.CurrentCulture, Strings.InstallerTimedOutCancelled, Describe(), timeout, result.ExitCode)
+            : string.Format(
+                CultureInfo.CurrentCulture, Strings.InstallerTimedOutForceStopped, Describe(), timeout, BundleProcessRunner.FormatSeconds(BundleProcessRunner.GracePeriod));
+
+        return CreateException(DotnetInstallErrorCode.InstallerTimedOut, message);
     }
 
     private void HandleExitCode(int exitCode)
