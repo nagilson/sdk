@@ -190,6 +190,9 @@ public enum DotnetInstallErrorCode
 
     /// <summary>The download resolved for a Windows installer bundle does not have the expected <c>.exe</c> file extension.</summary>
     WrongInstallerFileExtension,
+
+    /// <summary>The Windows installer bundle did not finish within the installer timeout and was stopped.</summary>
+    InstallerTimedOut,
 }
 
 /// <summary>

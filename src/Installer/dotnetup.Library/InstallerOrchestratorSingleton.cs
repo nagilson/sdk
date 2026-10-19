@@ -16,7 +16,34 @@ internal class InstallerOrchestratorSingleton
     {
     }
 
-    private static ScopedMutex ModifyInstallStateMutex() => new(Constants.MutexNames.ModifyInstallationStates);
+    /// <summary>
+    /// Extra wait, beyond the installer's own time budget, for the holder of the install-state mutex to validate the
+    /// installation and release the mutex.
+    /// </summary>
+    internal static TimeSpan InstallStateMutexMargin { get; } = TimeSpan.FromMinutes(2);
+
+    private static ScopedMutex ModifyInstallStateMutex(InstallRequestOptions options) =>
+        new(Constants.MutexNames.ModifyInstallationStates, GetInstallStateMutexTimeout(options));
+
+    /// <summary>
+    /// How long to wait for the install-state mutex. A Windows installer bundle install holds the mutex while the
+    /// installer runs, so a waiter in an admin-mode batch (whose installs share one timeout) must outlast the holder's
+    /// installer timeout, grace period, and termination wait. The wait never drops below the default.
+    /// </summary>
+    internal static TimeSpan GetInstallStateMutexTimeout(InstallRequestOptions options)
+    {
+        TimeSpan defaultTimeout = TimeSpan.FromSeconds(ScopedMutex.TimeoutSeconds);
+        if (options.InstallMechanism != InstallMechanism.WindowsInstallerBundle)
+        {
+            return defaultTimeout;
+        }
+
+        TimeSpan bundleTimeout = options.InstallerTimeout
+            + BundleProcessRunner.GracePeriod
+            + BundleProcessRunner.TerminationWait
+            + InstallStateMutexMargin;
+        return bundleTimeout > defaultTimeout ? bundleTimeout : defaultTimeout;
+    }
 
     /// <summary>
     /// Downloads the archive for an already-resolved install request into the download cache
@@ -300,7 +327,7 @@ internal class InstallerOrchestratorSingleton
     {
         var manifest = installRequest.Options.Untracked ? null : new DotnetupSharedManifest(installRequest.Options.ManifestPath);
 
-        using var finalizeLock = ModifyInstallStateMutex();
+        using var finalizeLock = ModifyInstallStateMutex(installRequest.Options);
 
         if (manifest?.InstallAlreadyExists(install) == true)
         {
@@ -377,7 +404,7 @@ internal class InstallerOrchestratorSingleton
     {
         var manifest = prepared.Request.Options.Untracked ? null : new DotnetupSharedManifest(prepared.Request.Options.ManifestPath);
 
-        using (var finalizeLock = ModifyInstallStateMutex())
+        using (var finalizeLock = ModifyInstallStateMutex(prepared.Request.Options))
         {
             IInstallationValidator validator = CreateInstallationValidator(prepared.Request.Options.InstallMechanism);
             if (manifest?.InstallAlreadyExists(prepared.Install) == true

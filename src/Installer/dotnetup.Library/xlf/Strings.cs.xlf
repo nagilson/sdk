@@ -576,6 +576,31 @@ Or open a new terminal.</target>
         <target state="new">Installation validation failed: {0}</target>
         <note>{0} is the reason the installation validation failed.</note>
       </trans-unit>
+      <trans-unit id="InstallerTimedOutCancelled">
+        <source>The installer for {0} did not finish within {1} minutes and was cancelled (installer exit code {2}). A cancelled installation is rolled back, but run 'dotnet --info' to check which versions are installed. If {0} is listed but does not work, run the command again or repair it from Settings &gt; Apps &gt; Installed apps. To allow more time, run the command again with a larger --installer-timeout.</source>
+        <target state="new">The installer for {0} did not finish within {1} minutes and was cancelled (installer exit code {2}). A cancelled installation is rolled back, but run 'dotnet --info' to check which versions are installed. If {0} is listed but does not work, run the command again or repair it from Settings &gt; Apps &gt; Installed apps. To allow more time, run the command again with a larger --installer-timeout.</target>
+        <note>{0} is the component and version (for example ".NET SDK 10.0.100"); {1} is the timeout in minutes; {2} is the installer's exit code. Do not translate 'dotnet --info' or '--installer-timeout'.</note>
+      </trans-unit>
+      <trans-unit id="InstallerTimedOutForceStopped">
+        <source>The installer for {0} did not finish within {1} minutes and did not cancel within {2} seconds of being asked, so dotnetup forcibly terminated it and stopped waiting. Part of the installer may still be running in the background, and the installation may be incomplete. Wait for it to finish (look for the .NET installer in Task Manager), then run the same command again to complete or repair the installation, and run 'dotnet --info' to check which versions are installed. To allow more time, use a larger --installer-timeout.</source>
+        <target state="new">The installer for {0} did not finish within {1} minutes and did not cancel within {2} seconds of being asked, so dotnetup forcibly terminated it and stopped waiting. Part of the installer may still be running in the background, and the installation may be incomplete. Wait for it to finish (look for the .NET installer in Task Manager), then run the same command again to complete or repair the installation, and run 'dotnet --info' to check which versions are installed. To allow more time, use a larger --installer-timeout.</target>
+        <note>{0} is the component and version (for example ".NET SDK 10.0.100"); {1} is the timeout in minutes; {2} is the grace period in seconds. Do not translate 'dotnetup', 'dotnet --info' or '--installer-timeout'.</note>
+      </trans-unit>
+      <trans-unit id="InstallerTimeoutOptionDescription">
+        <source>The number of minutes to wait for the Windows installer to finish when installing in admin mode (default: {0}). When the timeout elapses, dotnetup asks the installer to cancel, which rolls back the changes it made, and waits up to {1} seconds for the rollback to finish. If the installer has not exited by then, dotnetup forcibly terminates it and stops waiting; part of the installer may keep running in the background, and the installation may be left incomplete and need to be repaired.</source>
+        <target state="new">The number of minutes to wait for the Windows installer to finish when installing in admin mode (default: {0}). When the timeout elapses, dotnetup asks the installer to cancel, which rolls back the changes it made, and waits up to {1} seconds for the rollback to finish. If the installer has not exited by then, dotnetup forcibly terminates it and stops waiting; part of the installer may keep running in the background, and the installation may be left incomplete and need to be repaired.</target>
+        <note>{0} is the default number of minutes; {1} is the grace period in seconds. Do not translate 'dotnetup'.</note>
+      </trans-unit>
+      <trans-unit id="InstallerTimeoutOutOfRange">
+        <source>The value of {0} must be a whole number of minutes from 1 to {1}.</source>
+        <target state="new">The value of {0} must be a whole number of minutes from 1 to {1}.</target>
+        <note>{0} is the option name (--installer-timeout); {1} is the maximum number of minutes.</note>
+      </trans-unit>
+      <trans-unit id="InstallerTimeoutStopping">
+        <source>The .NET installer did not finish within {0} minutes. Asking it to cancel and waiting up to {1} seconds for it to roll back...</source>
+        <target state="new">The .NET installer did not finish within {0} minutes. Asking it to cancel and waiting up to {1} seconds for it to roll back...</target>
+        <note>{0} is the timeout in minutes; {1} is the grace period in seconds.</note>
+      </trans-unit>
       <trans-unit id="ListCommandDescription">
         <source>List installed .NET SDKs and runtimes managed by dotnetup.</source>
         <target state="new">List installed .NET SDKs and runtimes managed by dotnetup.</target>

@@ -309,6 +309,47 @@ public class InstallerOrchestratorTests
     }
 
     [TestMethod]
+    public void GetInstallStateMutexTimeout_Archive_UsesDefaultRegardlessOfInstallerTimeout()
+    {
+        var options = new InstallRequestOptions { InstallMechanism = InstallMechanism.Archive, InstallerTimeout = TimeSpan.FromHours(5) };
+
+        InstallerOrchestratorSingleton.GetInstallStateMutexTimeout(options)
+            .Should().Be(TimeSpan.FromSeconds(ScopedMutex.TimeoutSeconds));
+    }
+
+    [TestMethod]
+    [DataRow(10)]
+    [DataRow(60)]
+    [DataRow(1440)]
+    public void GetInstallStateMutexTimeout_Bundle_OutlastsInstallerTimeoutGraceAndTermination(int minutes)
+    {
+        var options = new InstallRequestOptions
+        {
+            InstallMechanism = InstallMechanism.WindowsInstallerBundle,
+            InstallerTimeout = TimeSpan.FromMinutes(minutes),
+        };
+
+        TimeSpan holderBudget = options.InstallerTimeout + BundleProcessRunner.GracePeriod + BundleProcessRunner.TerminationWait;
+
+        InstallerOrchestratorSingleton.GetInstallStateMutexTimeout(options)
+            .Should().Be(holderBudget + InstallerOrchestratorSingleton.InstallStateMutexMargin)
+            .And.BeGreaterThan(holderBudget);
+    }
+
+    [TestMethod]
+    public void GetInstallStateMutexTimeout_ShortBundleTimeout_NeverDropsBelowDefault()
+    {
+        var options = new InstallRequestOptions
+        {
+            InstallMechanism = InstallMechanism.WindowsInstallerBundle,
+            InstallerTimeout = TimeSpan.FromMinutes(1),
+        };
+
+        InstallerOrchestratorSingleton.GetInstallStateMutexTimeout(options)
+            .Should().Be(TimeSpan.FromSeconds(ScopedMutex.TimeoutSeconds));
+    }
+
+    [TestMethod]
     public void PrepareInstall_BundleAlreadyInstalled_ReturnsAlreadyInstalledWithoutDownloading()
     {
         using var testEnv = new TestEnvironment();

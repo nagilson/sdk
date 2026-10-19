@@ -77,6 +77,21 @@ public class AdminModeGateTests
     }
 
     [TestMethod]
+    [DataRow(new[] { "sdk", "install", "10.0", "--untracked", "--installer-timeout", "20" })]
+    [DataRow(new[] { "install", "10.0", "--untracked", "--installer-timeout", "20" })]
+    [DataRow(new[] { "runtime", "install", "10.0", "--untracked", "--installer-timeout", "20" })]
+    public void Enforce_InstallerTimeoutOnInstallCommands_IsAllowedInAdminMode(string[] args)
+    {
+        var parseResult = Parser.Parse(args);
+        parseResult.Errors.Should().BeEmpty();
+        InstallCommand command = args[0] == "runtime"
+            ? new RuntimeInstallCommand(parseResult)
+            : new SdkInstallCommand(parseResult);
+
+        AdminModeGate.Enforce(parseResult, command.GetAdminModeSupport(parseResult.CommandResult.Command), s_admin);
+    }
+
+    [TestMethod]
     public void Enforce_DefaultedOptions_AreIgnored()
     {
         // --interactive, --verbosity, and the bool options all receive implicit default results.

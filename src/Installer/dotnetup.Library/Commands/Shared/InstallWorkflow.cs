@@ -248,6 +248,7 @@ internal class InstallWorkflow
                 Untracked = _command.Untracked,
                 Verbosity = _command.Verbosity,
                 InstallMechanism = target.IsAdmin ? InstallMechanism.WindowsInstallerBundle : InstallMechanism.Archive,
+                InstallerTimeout = _command.InstallerTimeout,
             });
 
         var resolvedVersion = _command.ChannelVersionResolver.GetLatestVersionForChannel(request.Channel, request.Component, request.InstallRoot.Architecture);
