@@ -52,6 +52,130 @@ public class RegistryTests : IDisposable
         Assert.AreEqual("registry-1.docker.io", registry.BaseUri.Host);
     }
 
+    [DataRow(HttpStatusCode.OK, true)]
+    [DataRow(HttpStatusCode.NotFound, false)]
+    [DataRow(HttpStatusCode.Unauthorized, false)]
+    [DataRow(HttpStatusCode.Forbidden, false)]
+    [DataRow(HttpStatusCode.MethodNotAllowed, false)]
+    [TestMethod]
+    public async Task ManifestExistsAsync_ReturnsExpectedResult(HttpStatusCode statusCode, bool expected)
+    {
+        ILogger logger = _loggerFactory.CreateLogger(nameof(ManifestExistsAsync_ReturnsExpectedResult));
+        Mock<HttpClient> client = new(MockBehavior.Loose);
+        HttpRequestMessage? request = null;
+        client.Setup(c => c.SendAsync(It.IsAny<HttpRequestMessage>(), It.IsAny<CancellationToken>()))
+            .Callback<HttpRequestMessage, CancellationToken>((message, _) => request = message)
+            .ReturnsAsync(new HttpResponseMessage(statusCode));
+        DefaultManifestOperations operations = new(new Uri("https://example.com"), "example.com", client.Object, logger);
+
+        bool actual = await operations.ExistsAsync("test/repository", "sha256:1234", CancellationToken.None);
+
+        Assert.AreEqual(expected, actual);
+        Assert.IsNotNull(request);
+        Assert.AreEqual(HttpMethod.Head, request.Method);
+        Assert.AreEqual("https://example.com/v2/test/repository/manifests/sha256:1234", request.RequestUri!.AbsoluteUri);
+        Assert.IsNotEmpty(request.Headers.Accept);
+    }
+
+    [TestMethod]
+    public async Task ManifestExistsAsync_PropagatesServerErrors()
+    {
+        ILogger logger = _loggerFactory.CreateLogger(nameof(ManifestExistsAsync_PropagatesServerErrors));
+        Mock<HttpClient> client = new(MockBehavior.Loose);
+        client.Setup(c => c.SendAsync(It.IsAny<HttpRequestMessage>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        DefaultManifestOperations operations = new(new Uri("https://example.com"), "example.com", client.Object, logger);
+
+        await Assert.ThrowsAsync<ContainerHttpException>(() => operations.ExistsAsync("test/repository", "sha256:1234", CancellationToken.None));
+    }
+
+    [TestMethod]
+    public async Task PushAsync_SkipsBlobUploadsByDefaultWhenManifestAlreadyExists()
+    {
+        ILogger logger = _loggerFactory.CreateLogger(nameof(PushAsync_SkipsBlobUploadsByDefaultWhenManifestAlreadyExists));
+        const string repository = "test/repository";
+        const string manifestDigest = "sha256:manifest";
+        string[] tags = ["latest", "stable"];
+
+        Mock<IManifestOperations> manifestOperations = new(MockBehavior.Strict);
+        manifestOperations
+            .Setup(m => m.ExistsAsync(repository, manifestDigest, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        foreach (string tag in tags)
+        {
+            manifestOperations
+                .Setup(m => m.PutAsync(repository, tag, "{}", SchemaTypes.OciManifestV1, It.IsAny<CancellationToken>()))
+                .Returns(Task.CompletedTask);
+        }
+
+        Mock<IRegistryAPI> api = new(MockBehavior.Strict);
+        api.SetupGet(a => a.Manifest).Returns(manifestOperations.Object);
+        Registry registry = new("example.com", logger, api.Object);
+        BuiltImage image = new()
+        {
+            Config = "{}",
+            ImageDigest = "sha256:config",
+            Manifest = "{}",
+            ManifestDigest = manifestDigest,
+            ManifestMediaType = SchemaTypes.OciManifestV1,
+            Layers = [new ManifestLayer(SchemaTypes.OciLayerGzipV1, 123, "sha256:layer", null)],
+            OS = "linux",
+            Architecture = "amd64",
+        };
+        SourceImageReference source = new(registry, "base/image", "latest", null);
+        DestinationImageReference destination = new(registry, repository, tags);
+
+        await registry.PushAsync(image, source, destination, CancellationToken.None);
+
+        manifestOperations.Verify(m => m.ExistsAsync(repository, manifestDigest, It.IsAny<CancellationToken>()), Times.Once);
+        foreach (string tag in tags)
+        {
+            manifestOperations.Verify(m => m.PutAsync(repository, tag, "{}", SchemaTypes.OciManifestV1, It.IsAny<CancellationToken>()), Times.Once);
+        }
+        api.VerifyGet(a => a.Blob, Times.Never);
+    }
+
+    [TestMethod]
+    public async Task PushAsync_DoesNotCheckManifestWhenNoCacheIsEnabled()
+    {
+        ILogger logger = _loggerFactory.CreateLogger(nameof(PushAsync_DoesNotCheckManifestWhenNoCacheIsEnabled));
+        const string repository = "test/repository";
+        const string configDigest = "sha256:config";
+
+        Mock<IBlobOperations> blobOperations = new(MockBehavior.Strict);
+        blobOperations
+            .Setup(b => b.ExistsAsync(repository, configDigest, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        Mock<IManifestOperations> manifestOperations = new(MockBehavior.Strict);
+        manifestOperations
+            .Setup(m => m.PutAsync(repository, "latest", "{}", SchemaTypes.OciManifestV1, It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        Mock<IRegistryAPI> api = new(MockBehavior.Strict);
+        api.SetupGet(a => a.Blob).Returns(blobOperations.Object);
+        api.SetupGet(a => a.Manifest).Returns(manifestOperations.Object);
+
+        Registry registry = new("example.com", logger, api.Object);
+        BuiltImage image = new()
+        {
+            Config = "{}",
+            ImageDigest = configDigest,
+            Manifest = "{}",
+            ManifestDigest = "sha256:manifest",
+            ManifestMediaType = SchemaTypes.OciManifestV1,
+            Layers = [],
+            OS = "linux",
+            Architecture = "amd64",
+        };
+        SourceImageReference source = new(registry, "base/image", "latest", null);
+        DestinationImageReference destination = new(registry, repository, ["latest"]);
+
+        await registry.PushAsync(image, source, destination, noCache: true, CancellationToken.None);
+
+        manifestOperations.Verify(m => m.ExistsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        blobOperations.Verify(b => b.ExistsAsync(repository, configDigest, It.IsAny<CancellationToken>()), Times.Once);
+        manifestOperations.Verify(m => m.PutAsync(repository, "latest", "{}", SchemaTypes.OciManifestV1, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
     [TestMethod]
     public async Task RegistriesThatProvideNoUploadSizeAttemptFullUpload()
     {
@@ -555,15 +679,18 @@ public class RegistryTests : IDisposable
         var logger = _loggerFactory.CreateLogger(nameof(DownloadBlobAsync_RetriesOnFailure));
 
         var repoName = "testRepo";
+        // The digest must be the actual SHA-256 of the response bytes so that the internal
+        // branch's CopyToAndVerifyAsync digest validation passes after the download succeeds.
+        var responseBytes = new byte[] { 1, 2, 3 };
         var descriptor = new Descriptor(SchemaTypes.OciLayerGzipV1, "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81", 1234);
         var cancellationToken = CancellationToken.None;
 
         var mockRegistryAPI = new Mock<IRegistryAPI>(MockBehavior.Strict);
         mockRegistryAPI
-            .SetupSequence(api => api.Blob.GetStreamAsync(repoName, descriptor.Digest, cancellationToken))
+            .SetupSequence(api => api.Blob.GetUnvalidatedStreamAsync(repoName, descriptor.Digest, cancellationToken))
             .ThrowsAsync(new Exception("Simulated failure 1")) // First attempt fails
             .ThrowsAsync(new Exception("Simulated failure 2")) // Second attempt fails
-            .ReturnsAsync(new MemoryStream(new byte[] { 1, 2, 3 })); // Third attempt succeeds
+            .ReturnsAsync(new MemoryStream(responseBytes)); // Third attempt succeeds
 
         Registry registry = new(repoName, logger, mockRegistryAPI.Object, null, () => TimeSpan.Zero);
 
@@ -576,7 +703,7 @@ public class RegistryTests : IDisposable
             // Assert
             Assert.IsNotNull(result);
             Assert.IsTrue(File.Exists(result)); // Ensure the file was successfully downloaded
-            mockRegistryAPI.Verify(api => api.Blob.GetStreamAsync(repoName, descriptor.Digest, cancellationToken), Times.Exactly(3)); // Verify retries
+            mockRegistryAPI.Verify(api => api.Blob.GetUnvalidatedStreamAsync(repoName, descriptor.Digest, cancellationToken), Times.Exactly(3)); // Verify retries
         }
         finally
         {
@@ -601,7 +728,7 @@ public class RegistryTests : IDisposable
         var mockRegistryAPI = new Mock<IRegistryAPI>(MockBehavior.Strict);
         // Simulate 5 failures (assuming your retry logic attempts 5 times before throwing)
         mockRegistryAPI
-            .SetupSequence(api => api.Blob.GetStreamAsync(repoName, descriptor.Digest, cancellationToken))
+            .SetupSequence(api => api.Blob.GetUnvalidatedStreamAsync(repoName, descriptor.Digest, cancellationToken))
             .ThrowsAsync(new Exception("Simulated failure 1"))
             .ThrowsAsync(new Exception("Simulated failure 2"))
             .ThrowsAsync(new Exception("Simulated failure 3"))
@@ -616,7 +743,212 @@ public class RegistryTests : IDisposable
             await registry.DownloadBlobAsync(repoName, descriptor, cancellationToken);
         });
 
-        mockRegistryAPI.Verify(api => api.Blob.GetStreamAsync(repoName, descriptor.Digest, cancellationToken), Times.Exactly(5));
+        mockRegistryAPI.Verify(api => api.Blob.GetUnvalidatedStreamAsync(repoName, descriptor.Digest, cancellationToken), Times.Exactly(5));
+    }
+
+    [TestMethod]
+    public async Task GetManifestAsync_ThrowsWhenContentDoesNotMatchHeaderDigest()
+    {
+        const string tag = "latest";
+        string dockerContentDigest = "sha256:" + new string('a', 64);
+        DefaultManifestOperations manifestOperations = CreateManifestOperations(
+            """{"schemaVersion":2}""",
+            dockerContentDigest,
+            nameof(GetManifestAsync_ThrowsWhenContentDoesNotMatchHeaderDigest),
+            out HttpClient client);
+
+        using (client)
+        {
+            await Assert.ThrowsExactlyAsync<InvalidDigestException>(() =>
+                manifestOperations.GetAsync("testRepo", tag, cancellationToken: default));
+        }
+    }
+
+    [TestMethod]
+    public async Task GetManifestAsync_ThrowsForInvalidHeaderDigest()
+    {
+        DefaultManifestOperations manifestOperations = CreateManifestOperations(
+            """{"schemaVersion":2}""",
+            "not-a-valid-digest",
+            nameof(GetManifestAsync_ThrowsForInvalidHeaderDigest),
+            out HttpClient client);
+
+        using (client)
+        {
+            await Assert.ThrowsExactlyAsync<InvalidDigestException>(() =>
+                manifestOperations.GetAsync("testRepo", "latest", cancellationToken: default));
+        }
+    }
+
+    [TestMethod]
+    public async Task GetManifestAsync_ThrowsWhenContentDoesNotMatchRequestedDigest()
+    {
+        string requestedDigest = "sha256:" + new string('b', 64);
+        DefaultManifestOperations manifestOperations = CreateManifestOperations(
+            """{"schemaVersion":2}""",
+            null,
+            nameof(GetManifestAsync_ThrowsWhenContentDoesNotMatchRequestedDigest),
+            out HttpClient client);
+
+        using (client)
+        {
+            await Assert.ThrowsExactlyAsync<InvalidDigestException>(() =>
+                manifestOperations.GetAsync("testRepo", requestedDigest, cancellationToken: default));
+        }
+    }
+
+    [TestMethod]
+    public async Task GetManifestAsync_ThrowsWhenHeaderDigestDoesNotMatchContentForDigestRequest()
+    {
+        const string requestedDigest = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+        string dockerContentDigest = "sha256:" + new string('a', 64);
+        DefaultManifestOperations manifestOperations = CreateManifestOperations(
+            "",
+            dockerContentDigest,
+            nameof(GetManifestAsync_ThrowsWhenHeaderDigestDoesNotMatchContentForDigestRequest),
+            out HttpClient client);
+
+        using (client)
+        {
+            InvalidDigestException exception = await Assert.ThrowsExactlyAsync<InvalidDigestException>(() =>
+                manifestOperations.GetAsync("testRepo", requestedDigest, cancellationToken: default));
+
+            Assert.Contains(dockerContentDigest, exception.Message);
+        }
+    }
+
+    [TestMethod]
+    [DataRow(null)]
+    [DataRow("sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")]
+    public async Task GetManifestAsync_ThrowsForUnsupportedRequestedDigest(string? dockerContentDigest)
+    {
+        string requestedDigest = "sha512:" + new string('a', 128);
+        DefaultManifestOperations manifestOperations = CreateManifestOperations(
+            "",
+            dockerContentDigest,
+            nameof(GetManifestAsync_ThrowsForUnsupportedRequestedDigest),
+            out HttpClient client);
+
+        using (client)
+        {
+            InvalidDigestException exception = await Assert.ThrowsExactlyAsync<InvalidDigestException>(() =>
+                manifestOperations.GetAsync("testRepo", requestedDigest, cancellationToken: default));
+
+            Assert.Contains("Unsupported digest algorithm 'sha512'", exception.Message);
+        }
+    }
+
+    [TestMethod]
+    public async Task GetJsonAsync_ThrowsWhenContentDoesNotMatchDeclaredDigest()
+    {
+        // Arrange: DefaultBlobOperations.GetJsonAsync fetches a blob (e.g. the image config
+        // referenced by a manifest) by digest and hands back a parsed JsonNode. Layer blobs are
+        // verified via StreamExtensions.CopyToAndVerifyAsync when downloaded; config/blob JSON
+        // content fetched this way should receive the same treatment -- it must be hashed and
+        // compared against the digest it was requested by. A compromised or MITM registry could
+        // otherwise serve different content for the same digest without detection.
+        //
+        // Note: this is tested directly against DefaultBlobOperations (rather than through
+        // Registry.GetImageManifestAsync via a mocked IRegistryAPI) because the digest
+        // verification must happen here, where the raw response bytes are still available --
+        // IBlobOperations.GetJsonAsync is the boundary where they get discarded in favor of a
+        // parsed JsonNode.
+        ILogger logger = _loggerFactory.CreateLogger(nameof(GetJsonAsync_ThrowsWhenContentDoesNotMatchDeclaredDigest));
+        var repoName = "testRepo";
+        string configDigest = "sha256:" + new string('c', 64);
+        Uri baseUri = new("https://my-registry.example.com");
+
+        // Content actually returned for configDigest -- its real SHA-256 does not equal
+        // configDigest, simulating tampered/mismatched content.
+        string configJson = """{ "architecture": "amd64", "os": "linux", "config": {}, "rootfs": { "type": "layers", "diff_ids": [] } }""";
+
+        var handler = new TestMessageHandler(request => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(configJson) });
+        using HttpClient client = new(handler);
+
+        DefaultBlobOperations blobOperations = new(baseUri, repoName, client, logger);
+
+        // Act & Assert: fetching the config blob should fail digest verification because the
+        // declared digest does not match the content actually received.
+        await Assert.ThrowsExactlyAsync<InvalidDigestException>(() =>
+            blobOperations.GetJsonAsync(repoName, configDigest, cancellationToken: default));
+    }
+
+    /// <summary>
+    /// Test double for <see cref="IManifestPicker"/> that always picks the first manifest in the
+    /// list/index, regardless of the requested runtime identifier.
+    /// </summary>
+    private sealed class AlwaysPickFirstManifestPicker : IManifestPicker
+    {
+        public PlatformSpecificManifest? PickBestManifestForRid(IReadOnlyDictionary<string, PlatformSpecificManifest> manifestList, string runtimeIdentifier)
+            => manifestList.Values.FirstOrDefault();
+
+        public PlatformSpecificOciManifest? PickBestManifestForRid(IReadOnlyDictionary<string, PlatformSpecificOciManifest> manifestList, string runtimeIdentifier)
+            => manifestList.Values.FirstOrDefault();
+    }
+
+    /// <summary>
+    /// Minimal <see cref="HttpMessageHandler"/> test double that answers every request with a
+    /// response produced by <paramref name="server"/>. Used to test HttpClient-based classes
+    /// (like <see cref="DefaultBlobOperations"/>) whose HttpClient calls use overloads that Moq
+    /// cannot intercept directly (e.g. the 3-argument SendAsync overload is not overridable).
+    /// </summary>
+    private sealed class TestMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> server) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => Task.FromResult(server(request));
+    }
+
+    private DefaultManifestOperations CreateManifestOperations(
+        string manifestContent,
+        string? dockerContentDigest,
+        string testName,
+        out HttpClient client)
+    {
+        var handler = new TestMessageHandler(_ =>
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(manifestContent)
+            };
+            response.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(SchemaTypes.DockerManifestV2);
+            if (dockerContentDigest is not null)
+            {
+                response.Headers.Add("Docker-Content-Digest", dockerContentDigest);
+            }
+            return response;
+        });
+        client = new HttpClient(handler);
+        return new DefaultManifestOperations(
+            new Uri("https://my-registry.example.com"),
+            "testRepo",
+            client,
+            _loggerFactory.CreateLogger(testName));
+    }
+
+    /// <summary>
+    /// Verifies that an invalid authentication response during a layer download fails immediately
+    /// and retains the original registry and reason rather than becoming a generic download failure.
+    /// </summary>
+    [TestMethod]
+    public async Task DownloadBlobAsync_PropagatesInvalidAuthResponseWithoutRetry()
+    {
+        const string registryName = "registry.invalid";
+        const string repository = "test/image";
+        var logger = _loggerFactory.CreateLogger(nameof(DownloadBlobAsync_PropagatesInvalidAuthResponseWithoutRetry));
+        // Use an uncached digest so the download reaches the registry rather than the local store.
+        var descriptor = new Descriptor(SchemaTypes.OciLayerGzipV1, $"sha256:{Guid.NewGuid():N}{Guid.NewGuid():N}", 123);
+        var expected = new InvalidAuthResponseException(registryName, "authentication challenge came from another origin");
+        var api = new Mock<IRegistryAPI>(MockBehavior.Strict);
+        api.Setup(a => a.Blob.GetUnvalidatedStreamAsync(repository, descriptor.Digest, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(expected);
+        var registry = new Registry(registryName, logger, api.Object, retryDelayProvider: () => TimeSpan.Zero);
+
+        // A permanent authentication rejection must escape immediately, preserving the original exception.
+        InvalidAuthResponseException actual = await Assert.ThrowsExactlyAsync<InvalidAuthResponseException>(
+            () => registry.DownloadBlobAsync(repository, descriptor, TestContext.CancellationToken));
+
+        Assert.AreSame(expected, actual);
+        api.Verify(a => a.Blob.GetUnvalidatedStreamAsync(repository, descriptor.Digest, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     private static NextChunkUploadInformation ChunkUploadSuccessful(Uri requestUri, Uri uploadUrl, int? contentLength, HttpStatusCode code = HttpStatusCode.Accepted)

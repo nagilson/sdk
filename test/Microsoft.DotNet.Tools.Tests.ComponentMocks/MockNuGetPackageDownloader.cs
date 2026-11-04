@@ -23,6 +23,8 @@ namespace Microsoft.DotNet.Cli.NuGetPackageDownloader
 
         public List<string> DownloadCallResult = new();
 
+        public List<(PackageId id, int numberOfResults, PackageSourceLocation packageSourceLocation, bool includePreview)> GetLatestPackageVersionsCallParams = new();
+
         public List<(string, DirectoryPath)> ExtractCallParams = new();
 
         public HashSet<string> PackageIdsToNotFind { get; set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -110,6 +112,7 @@ namespace Microsoft.DotNet.Cli.NuGetPackageDownloader
 
         public Task<IEnumerable<NuGetVersion>> GetLatestPackageVersions(PackageId packageId, int numberOfResults, PackageSourceLocation packageSourceLocation = null, bool includePreview = false)
         {
+            GetLatestPackageVersionsCallParams.Add((packageId, numberOfResults, packageSourceLocation, includePreview));
 
             if (!ShouldFindPackage(packageId, packageSourceLocation))
             {
@@ -135,8 +138,11 @@ namespace Microsoft.DotNet.Cli.NuGetPackageDownloader
         }
 
         public Task<(NuGetVersion version, PackageSource source)> GetBestPackageVersionAndSourceAsync(PackageId packageId,
-            VersionRange versionRange,PackageSourceLocation packageSourceLocation = null)
+            VersionRange versionRange,PackageSourceLocation packageSourceLocation = null,
+            CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (!ShouldFindPackage(packageId, packageSourceLocation))
             {
                 return Task.FromException<(NuGetVersion version, PackageSource source)>(new NuGetPackageNotFoundException(string.Format(CliStrings.IsNotFoundInNuGetFeeds, packageId, MOCK_FEEDS_TEXT)));
