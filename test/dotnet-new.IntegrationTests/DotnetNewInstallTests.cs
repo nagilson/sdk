@@ -55,6 +55,7 @@ namespace Microsoft.DotNet.Cli.New.IntegrationTests
         }
 
         [TestMethod]
+        [Retry(3, MillisecondsDelayBetweenRetries = 1_000, BackoffType = DelayBackoffType.Exponential)]
         public void CanInstallRemoteNuGetPackage_LatestVariations()
         {
             var commandName = "install";
