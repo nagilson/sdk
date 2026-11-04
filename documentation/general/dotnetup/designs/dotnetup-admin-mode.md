@@ -39,9 +39,7 @@ dotnetup will install .NET SDKs and runtimes in C:\Users\noahgilson\AppData\Loca
     Everywhere  (default)
       Modify the system PATH so all apps use dotnetup's .NET installs (requires elevation).
     Admin
-      Installs are managed by other tools alongside `dotnetup` in a shared system folder.
-      Installation is slower and consumes more disk space but supports external central IT management.
-
+      Installs can be managed by other tools alongside dotnetup in a shared system folder.
 ```
 
 If the 'system' path is already pointed towards somewhere besides an expected program files location `dotnetup` will fail.
@@ -60,17 +58,17 @@ The `PATH` will not be managed by `dotnetup` as the[ MSI installer already does 
 | Arm64 | Arm64 | `PR\dotnet` |
 | Arm64 | x64 | `PR\dotnet\x64` |
 
-Migrating system installs is meaningless and so it will always be 'No.'
+Migrating system installs is meaningless, so the `init` form hides the migration field in admin mode and never migrates.
 
-## dotnetup `init`
+## Selecting Admin Mode
 
-`init` gets a `--mode <MODE>` option that accepts `none`, `shell`, `everywhere`, or `admin`, depending upon supported OS context. `--mode` is optional, including with `--interactive false`; without it, non-interactive `init` keeps its existing defaults.
+`admin` mode is selected with:
 
-`init --mode admin` only switches the machine to `admin` mode. It does not install .NET or configure the environment. While `admin` mode is active, `init` without `--mode` makes no changes and explains how to leave `admin` mode; `init --mode <other mode>` disables `admin` mode first, then runs the normal setup with that mode.
+```console
+dotnetup env set admin
+```
 
-Defaults remain the same for other options, with migration being true or false depending on the pre-existing default. (`admin` mode will never `migrate`.)
-
-Callers such as C#DK that want integration with VS will need to call `dotnetup init --interactive false --mode admin`, then install with `dotnetup sdk install <version> --untracked`.
+This removes dotnetup-managed user-level .NET environment wiring and stores `admin` as the current user's access mode. The separate `--dotnetup-on-path` setting is honored; unrelated environment entries and installed SDKs and runtimes are left alone. Callers such as C# Dev Kit then install the exact SDK they need with `dotnetup sdk install <version> --untracked`.
 
 ## Bifurcated Behavior
 
@@ -78,7 +76,7 @@ Callers such as C#DK that want integration with VS will need to call `dotnetup i
 
 `dotnetup sdk install` for example, will only install to the user folder using archives if the mode is not `admin`. If the mode is `admin`, it will only ever install via `msi`s.
 
-`dotnetup --info`, `dotnetup list` and other commands will only show the installs for the current management mode. They may allude to the fact that other mode installs exist.
+`dotnetup --info` reports the current configuration but does not list system installations in the MVP. `dotnetup list` reports that listing is not yet supported and directs users to `dotnet --list-sdks`, `dotnet --list-runtimes`, or `dotnet --info`.
 
 `dotnetup update` will not try to update installs from the other management mode, and so on.
 
@@ -86,17 +84,17 @@ Callers such as C#DK that want integration with VS will need to call `dotnetup i
 
 To rapidly support an emerging C#DK release, `dotnetup` will rollout `admin` support over time per command.
 
-`dotnetup sdk install` and `dotnetup runtime install` will be the only functional install commands in `admin` mode. `init`, `env set`, and `self update` remain available so that users can change modes and update `dotnetup`. [`env script`](../reference/dotnetup-env-script.md) and its hidden `print-env-script` compatibility alias also remain available so existing shell profiles can run without errors, but never activate user-level .NET in `admin` mode. Every other command, including bare `dotnetup`, fails with `AdminModeCommandNotSupported`.
+`dotnetup sdk install` and `dotnetup runtime install` are the functional install commands in `admin` mode. `init`, `env set`, `env clear`, `env show`, `--info`, and `self update` remain available so users can change or inspect their mode and update `dotnetup`. [`env script`](../reference/dotnetup-env-script.md) and its hidden `print-env-script` compatibility alias also remain available so shell profiles keep working. Every other command, including bare `dotnetup`, fails with `AdminModeCommandNotSupported`; `list` uses an admin-specific unsupported message.
 
 Commands are blocked by default: a command runs in `admin` mode only when its command class declares `admin` support, and that declaration lists the options and arguments it accepts there. Any other option or argument that the user supplies fails with `AdminModeSymbolNotSupported`.
 
 ### `dotnetup <> Install` Command Arguments under `admin`:
 
-`--untracked` must also be provided in `admin` mode, at least in the MVP stage.
+`--untracked` must also be provided in `admin` mode for installs to the shared system location, at least in the MVP stage. It is not required when global.json `paths` select a local directory; see [`global.json`](#globaljson).
 
 `--installer-timeout` is supported in `admin` mode; see [Installer Timeout](#installer-timeout).
 
-`--install-directory` will remain unsupported as MSI based installation will only ever install to the expected system managed, shared directory.
+`--install-directory` will remain unsupported as MSI based installation will only ever install to the expected system managed, shared directory. Only a `global.json` `paths` entry can redirect an `admin` mode install to a local directory; see [`global.json`](#globaljson).
 
 `--muxer` related replacement commands or configuration is not controllable for MSI installs so this flag will cause failure if it is applied under `admin` mode, similar to `--install-directory`, meaning `dotnet` must NOT be in use to have `admin` installs succeed.
 
@@ -109,49 +107,44 @@ Rollout for other commands will be integrated later, such as:
 
 ### MVP Telemetry
 
-`admin` mode telemetry should not be part of the queries in the kusto ADX dashboard. `admin` installers have lower install success rates, which we don't want to distract from `dotnetup`. The ADX dashboard must be able to differentiate via a flag across all telemetry whether it is in `admin` mode or not - likely `mode` can be part of all auto-ingested telemetry properties, though it may also be `unknown` before `init`.
+`admin` mode telemetry is separated from the normal queries in the Kusto ADX dashboard because admin installers have different success characteristics. The dashboard access-mode selector defaults to non-admin telemetry and can instead select admin telemetry. Rows created before access-mode telemetry was added are treated as non-admin.
 
 ### Mode Storage
 
-On Windows, `admin` mode is a machine-wide setting stored in admin-only `HKLM` registry values. Changing it requires elevation. The other modes (`none`, `shell`, and `everywhere`) remain per-user preferences in the existing `dotnetup` configuration under the user's data directory.
+`admin`, like the other access modes, is stored in the current user's existing `dotnetup` configuration. Different users can select different access modes. This setting does not grant administrative privileges: the official installer still requests administrator approval when it performs a machine-wide installation.
 
-The per-user configuration cannot enforce `admin` mode. An unelevated user can replace the configuration file or its containing directory, or redirect the data directory with `DOTNET_DOTNETUP_DATA_DIR`. ACL-protecting the file, or a subdirectory of the user profile, would not help because the user controls the parent directory and can rename the protected item, then create a replacement. A protected directory under `%ProgramData%` would be enforceable, but it would duplicate the registry settings below without Group Policy or Intune support.
+On Windows, `admin` can be selected from the interactive `dotnetup init` form or with
+`dotnetup env set admin`. There is no `init --mode` option.
 
 #### Registry Values (Windows only)
 
-Two independent `REG_DWORD` values under `HKLM\SOFTWARE\Policies\Microsoft\dotnet\Dotnetup` control `admin` mode. Both use the same structure: `1` (or any nonzero value) enables the behavior, and `0`, a missing value, or an unreadable value disables it. They are read from the native registry view, so WOW64 redirection does not split them.
+The `BlockUnsignedDownloads` `REG_DWORD` value under `HKLM\SOFTWARE\Policies\Microsoft\dotnet\Dotnetup` controls whether unsigned downloads are allowed. A nonzero value blocks them; `0`, a missing value, or an unreadable value allows them. It is read from the native registry view, so WOW64 redirection does not split it.
 
 | Value | Purpose |
 | --- | --- |
-| `AdminMode` | Selects `admin` mode for every user on the machine. |
-| [`BlockUnsignedDownloads`](../signature-verification.md) | Blocks downloads that have no detached signature, such as daily builds. It applies in every mode. It does not block `self update` of an Authenticode-signed `dotnetup`, whose replacement must itself be Authenticode-signed. |
+| [`BlockUnsignedDownloads`](../signature-verification.md) | Blocks downloads that have no detached signature, such as daily builds. It applies in every mode and also blocks `dotnetup self update`. |
 
-IT administrators can set either value through Group Policy, Intune, or similar tools. `dotnetup init` and `dotnetup env set` also write them after elevation, as described below. Keeping the values separate lets IT block unsigned downloads outside `admin` mode, or allow them inside it.
-
-The effective mode is resolved in this order:
-
-1. If `AdminMode` is nonzero, the mode is `admin`.
-2. Otherwise, the per-user configuration determines the mode. The per-user configuration can never select `admin` mode; a hand-edited `admin` value is treated as unset.
-
-When `AdminMode` selects `admin` mode, the per-user access mode is ignored but not rewritten. Its previous mode therefore applies again if `admin` mode is later disabled. `env script` still honors the independent `dotnetup`-on-`PATH` selection. Interactive `init` does not prompt for a mode, first-use onboarding treats the mode as already selected, and telemetry records whether the mode came from policy or user configuration.
-
-Only administrators can write either value, while standard users can read both.
+Administrators can set this value through Group Policy, Intune, or similar tools.
+dotnetup does not change it when selecting, reapplying, or leaving an access mode.
+Admin mode requires signature validation independently of this policy.
 
 #### Changing the Mode
 
-Selecting `admin` mode with `init` or `env set` sets `AdminMode` and `BlockUnsignedDownloads` to `1`. Leaving `admin` mode sets `AdminMode` to `0` and leaves `BlockUnsignedDownloads` unchanged, because IT may manage it independently. Both operations prompt for UAC before changing any state, and neither prompts when `AdminMode` already has the requested value or `dotnetup` is already elevated. If elevation is declined or fails, or the value does not change afterwards (for example, because Group Policy reapplies it), the command fails and neither the registry nor the per-user configuration changes. This also applies to `dotnetup init --interactive false --mode admin` when called by C#DK.
+Selecting `admin` mode with `env set` or init applies environment changes and
+stores the user setting without changing `BlockUnsignedDownloads`. Leaving
+`admin` mode also leaves the policy unchanged.
 
-Elevation reuses the existing hidden-command pattern used for the system `PATH` ([`WindowsPathHelper.StartElevatedProcess`](../../../../src/Installer/dotnetup.Library/WindowsPathHelper.cs)). The elevated command accepts only the fixed `enableadminmode` and `disableadminmode` operations. It must not accept registry paths, value names, or data from its arguments. Because that pattern elevates `dotnetup.exe` from a user-writable location, a future alternative is to elevate `%SystemRoot%\System32\reg.exe` with fixed arguments instead.
+`env set` without a mode reapplies the stored environment settings. `env clear` is
+equivalent to `env set none --dotnetup-on-path false`.
+Neither command installs or uninstalls .NET. Init preserves
+the configured dotnetup-on-PATH setting, defaulting to `true` on first setup.
 
-Because `AdminMode` is machine-wide, selecting or leaving `admin` mode affects every user on the machine. `init` and `env set` state this before prompting for UAC.
-
-Leaving `admin` mode happens only right before the newly selected mode is applied. If `init` exits without changes (the user exits the form, or a local `global.json` sets `sdk.paths`), or runs as a dry run, `admin` mode stays enabled. Selecting `admin` mode while it is already active changes nothing and does not prompt.
+An environment or config write failure is reported as a failure, not as successful
+setup. Existing Everywhere-mode PATH cleanup can still require elevation.
 
 #### Limitations
 
-The registry values constrain only `dotnetup`. Entering `admin` mode leaves existing shell profiles and saved user settings untouched; it does not attempt to remove or rewrite profile entries from earlier setups. While `admin` mode is active, `env script` can add `dotnetup` to `PATH` but never adds the user-level .NET root or sets `DOTNET_ROOT`, including when an existing profile explicitly requests `--dotnet`. The preserved profiles can activate the saved setup again after leaving `admin` mode.
-
-Enabling `admin` mode explains this behavior. It does not remove archive installs, existing `PATH` entries, or user-level `DOTNET_ROOT` values from earlier modes. Open terminals may retain their previous environment; users should restart them and review any remaining environment settings if user-level .NET still takes precedence. The registry values also do not prevent users from acquiring .NET through other tools.
+Selecting `admin` mode rewrites the dotnetup shell profile block so it calls `env script` with only the parameters for that mode, which do not add the user-level .NET root or set `DOTNET_ROOT`. `env script` has no admin-specific logic and honors the parameters it is given. Existing archive installs remain on disk. Open terminals may retain their previous environment until restarted.
 
 No equivalent exists on other platforms because `admin` mode is Windows-only.
 
@@ -165,13 +158,19 @@ Therefore, `dotnetup` and its commands will behave differently in `admin` mode, 
 
 ## Channels
 
-Channel semantics remain the same.
-
-`dotnetup sdk install daily`, or `11.0.1xx` would still install the same version regardless of the `mode`. The names for channels will remain the same. What a channel does however will be different.
-
-Enabling `admin` mode also sets `BlockUnsignedDownloads`, so unsigned installers are blocked by default.
-
-`daily` blobs exist but are not Authenticode signed (for example, https://aka.ms/dotnet/12.0.1xx/daily/dotnet-sdk-win-x64.exe). When `BlockUnsignedDownloads` is `0`, `admin` mode installs these `.exe` installers from the blob feed after verifying their published SHA-512 hash and printing the same unsigned-download warning used for archives. Authenticode is not checked for them. Installers resolved from the signed `releases.json` must always pass Authenticode verification chaining to a Microsoft root. IT administrators remain able to block unsigned installers via policy.
+Channel names and version selection remain the same, but system-wide admin installs require
+signature validation. Unsigned daily or blob-feed builds are blocked even when
+`BlockUnsignedDownloads` is `0`, with the user error
+"Signature validation is required when using admin mode."
+Installers must also pass Authenticode verification chaining to a Microsoft root;
+a failure is reported as `SignatureVerificationFailed` and the installer is not run.
+Archive installs into a repo-local directory selected through global.json
+`sdk.paths` follow ordinary archive signing rules: unsigned daily builds are
+allowed unless `BlockUnsignedDownloads` blocks them. This admin-mode requirement
+applies to system-wide .NET installs, not dotnetup
+itself. `dotnetup self update` is unaffected by access mode: it retains its
+existing hash verification, machine-policy checks, and requirement for a
+Microsoft-rooted Authenticode signature when the installed executable is signed.
 
 
 ### Channel Differentiators under `admin`
@@ -181,16 +180,11 @@ In `admin` mode, channels strictly relate to shorthands for specific versions to
 
 ## `dotnetup` Manifest Behavior
 
-The manifest will be ignored and there will be no `admin` dotnetup manifest.
+The dotnetup manifest records install specs (requests for installs) to use for updates and garbage collection, and the actual installations installed in each install root.
 
-The dotnetup manifest exists to speed up checks, such as whether or not the install already exists, and to inform `dotnetup` of what is managed on the machine across numerous locations, and what to update.
+For admin mode installs, we will not use the dotnetup manifest to record the installations.  Admin installs can be installed and updated outside of dotnetup so the manifest would not be an accurate source of truth.
 
-Initial designs may consider a separate manifest file for `admin` installs, or `admin` installed baked into the manifest. However, the manifest will never be correct and it will always need revalidation, because other software on the machine may manipulate or change installations or install policy. In addition, update and retention policies outside of `dotnetup` influence `.exe` behavior.
-
-
-### Future Manifest Behavior
-
-We may add later support for an `admin` based manifest to allow updating everything tracked by `dotnetup` to provide a more similar experience.
+In the MVP, we don't record install specs or support updating admin installs.  When we do add that support we will likely record admin install specs in the dotnetup manifest, while using other sources of truth (such as the Registry) to determine what is currently installed.
 
 ### Install Lookup
 
@@ -198,7 +192,9 @@ Instead of a manifest, `dotnetup` will need to query the system for the current 
 
 `dotnetup list`, `dotnetup --info` and other commands in `admin` mode will defer to `hostfxr` APIs to avoid duplicated or sharded implementation.
 
-Install checks query `hostfxr` through the install root's `dotnet` executable (`--list-sdks` and `--list-runtimes`) in a child process. Loading the system `hostfxr` into `dotnetup` itself would lock a file that the installer may need to replace, which can force a restart. Prepared bundle installs repeat this check while holding the commit mutex, before running the installer, so a request already satisfied by an earlier batch item or another process is skipped without another installer or UAC prompt.
+Install checks look at the files on disk rather than calling `hostfxr`. With an explicit install root, `hostfxr_get_dotnet_environment_info` only scans folders, plus a `global.json` lookup and an environment variable that do not apply to "is this version installed here". Archive and admin installer installs share one validator; the caller supplies the install root (the user root, or the system root in admin mode). An install is present when the muxer exists and the exact version folder contains the same marker file `hostfxr` uses: `sdk/<version>/dotnet.dll` for SDKs and `shared/<framework>/<version>/<framework>.deps.json` for runtimes. Avoiding `hostfxr` also means no system `hostfxr` file is loaded and locked while the installer may need to replace it. If the installer reports success but the files are still missing, which happens when Windows Installer already has the packages registered (for example, by Visual Studio) but their files were deleted, `dotnetup` runs the same verified installer once with `/repair /passive /norestart` and checks again. Prepared bundle installs repeat the check while holding the commit mutex, before running the installer, so a request already satisfied by an earlier batch item or another process is skipped without another installer or UAC prompt.
+
+The implementation is in [`InstallationValidator`](../../../../src/Installer/dotnetup.Library/InstallationValidator.cs).
 
 ### Install Directory with `admin` mode
 
@@ -229,38 +225,41 @@ This means outside of `admin` mode, `dotnetup <> update` will also need to take 
 
 ### Uninstall & Garbage Collection
 
-MSIs reference count dependents; uninstalling an SDK bundle may leave runtimes behind if Visual Studio or other tools still depend on them.
-Garbage collection may aggressively try to trim installs managed by other tools. Therefore, GC will be disabled.
+MSI packages installed by Burn bundles register dependency providers. A parent bundle is registered as a dependent of its chained MSI packages, and installers such as Visual Studio can register their own named dependents. Bundles themselves are not reference counted.
+
+Uninstalling a bundle removes that bundle's dependency registration and requests removal of its MSI packages. A package remains installed while another registered dependent, such as Visual Studio, still requires it. An application that merely directs a user to the standalone .NET installer does not gain an application-specific dependency registration; the dependency relationship is between that installer bundle and its MSI packages.
+
+Garbage collection cannot distinguish a system installation that the user still wants from one that is no longer needed. It could therefore remove installations managed by another bundle or tool. GC will be disabled in `admin` mode.
 
 To uninstall a system install, the following arguments can be given to the `.exe` bundle: `['/uninstall', '/passive', '/norestart']`.
 
 `dotnetup uninstall` will not initially be supported in `admin` mode.
 
-`/uninstall` respects reference counts but only VS and a few others respect it - e.g. when tools like PowerToys give the user a link to download the Runtime, that is not reference counted, so garbage collection as it is for non-`admin` modes would remove what users had already requested if the installs are not respected from other sources.
+`/uninstall` may not fully remove the install if multiple dependency registrations exist against that install. Through the .exe installer, Burn manages dependents. Visual Studio is another such dependent. When a user installs via the .exe bundle, e.g. when applications prompt a user to install the .NET runtime and they use the .exe installer, another .exe installer later would allow uninstall. There is no separate registered blocking dependent. In the case of VS or another tool installing as a special dependency registration however, it would not be uninstalled.
 
-We also know `/uninstall` on the `.exe` may return `0` even if the install was not uninstalled if other references remain so we must make our own hostfxr API check afterward to see if something was actually uninstalled or not.
+This means Garbage Collection would intrusively uninstall user's existing installs if it were handled the same way as non-admin mode installs.
 
 Replacement policy is not respected by the `.exe` in terms of muxer or other settings and there currently exists no such control.
 
 ## Concurrency
 
-Simultaneous commit operations - which in non-admin means 'extract', is not possible with MSI installs. `dotnetup` already defers the extract operation to one sequential step with concurrent downloads. The commit operation will happen sequentially in the same way. Concurrency will be deferred to avoid multi-UAC prompting.
+Simultaneous commit operations - which in non-admin means 'extract', are not possible with per-machine MSI installs because the Windows Installer service does not permit them to run concurrently. `dotnetup` already defers the extract operation to one sequential step with concurrent downloads. Installer commit operations will happen sequentially in the same way.
 
 ## `global.json`
 
-`global.json` functionality will be very limited and only influence version resolution when it is not provided.
+`global.json` functionality will be very limited: it influences version resolution when no version is provided, and its SDK `paths` can redirect the install to a local directory.
 
 A `global.json` file in the `cwd` influences the behavior of `dotnetup`. `global.json` files may or may not have the same file privilege boundary as a system protected file. If callers want to use `global.json` `cwd` must be applied.
 
 Because UAC is required, the user's intent will be assumed and respected, so `global.json` will still influence the channel/version if no `channel` is provided when running a command such as `dotnetup sdk install` or `dotnetup runtime install`. It will not influence update behavior.
 
-SDK `Paths` functionality as a `global.json` node will not be respected as it is not respected by `admin` installers today, and this behavior should not be allowed to influence system level decisions. It will not be a failure to install due to this to prevent unexpected failure.
+SDK `paths` are not respected by the `admin` installers, which always install to the shared system location, so they must not influence system level decisions. Instead, when the first meaningful `paths` entry is a literal directory outside the system .NET location, `dotnetup` installs into that directory with the same archive mechanism it uses outside `admin` mode, because the repository opted into a local SDK there. These installs require no elevation, are tracked in the dotnetup manifest like any other archive install unless `--untracked` is passed, and allow unsigned daily builds unless `BlockUnsignedDownloads` blocks them. The access mode remains `admin` for the command gate and telemetry; the `install.mechanism` (`archive`) and `install.path_source` (`globaljson`) telemetry tags identify these installs. When the first entry is `$host$`, or the literal path is the system .NET location, the `.exe` installer installs to the system location as usual.
 
 ## `.exe` Installer Error Handling
 
-Before running an installer, `dotnetup` verifies its SHA-512 hash (from the signed `releases.json`, or from the blob feed for allowed unsigned builds), opens it so that it cannot be written or deleted until the installer exits, verifies the hash again, and then verifies Authenticode for signed sources.
+Before running an installer, `dotnetup` verifies its SHA-512 hash from the signed `releases.json`, opens it so that it cannot be written or deleted until the installer exits, verifies the hash again, and then verifies Authenticode. Unsigned blob-feed builds are blocked before download.
 
-The installer bundles request `asInvoker`, so `dotnetup` starts them without elevation using `/install /quiet /norestart`, and each bundle raises its own UAC prompt. `dotnetup` itself is never elevated to install. Installers run one at a time, so prompts never overlap.
+The installer bundles request `asInvoker`, so `dotnetup` starts them without elevation using `/install /passive /norestart`, showing installer progress UI, and each bundle raises its own UAC prompt. `dotnetup` itself is never elevated to install. Installers run one at a time, so prompts never overlap.
 
 Ctrl+C does not stop a running installer (Burn is a GUI-subsystem process and does not receive console control events); `dotnetup` waits for it to finish or for the installer timeout below, and reports its real result, then starts no further installers in the batch and reports each remaining install as cancelled (`OperationCancelled`).
 
@@ -268,20 +267,34 @@ Ctrl+C does not stop a running installer (Burn is a GUI-subsystem process and do
 
 `sdk install`, `runtime install`, and `install` accept `--installer-timeout <MINUTES>` (default `10`, valid range 1-1440; also allowed in `admin` mode). It bounds how long `dotnetup` waits for each installer bundle; archive installs ignore it. It is a command-line option for now and may later be stored in the `dotnetup` configuration. When the timeout elapses:
 
-1. `dotnetup` asks the bundle to cancel by posting `WM_CLOSE` to the hidden window of class `WixStdBA` owned by the bundle's process or one of its descendants. WiX v6 bundles (the runtime bundles) host the bootstrapper application in a `wixstdba.exe` child of the Burn engine; WiX v5 bundles (the SDK bundle) may host it in the engine itself. Under `/quiet`, wixstdba's `OnClose` cancels without prompting and, while applying, keeps running so that rollback can occur; every later engine callback returns cancel, and during the elevated MSI phase the cancel reaches Windows Installer, which rolls back. The engine exits with `1602` and removes its extracted files. `Process.CloseMainWindow` must not be used: it targets the engine's `WixBurnMessageWindow`, which does not cancel, and destroys the window Burn uses for `WM_QUERYENDSESSION`.
-2. Burn acts on the cancel only at its next callback, and rolling back a large MSI chain takes time, so the installer gets a grace period of 120 seconds to exit. Any exit code other than success after the cancel request is reported as `InstallerTimedOut` (not `OperationCancelled` or `InstallerFailed`); a success exit code during the grace period means the install finished and is treated as success.
-3. If the installer has not exited, `dotnetup` kills its process tree and stops waiting, so `dotnetup` returns within the timeout plus the grace period plus a 10-second wait for termination. This is a last resort that may not stop the installation: the elevated Burn engine, started by the unelevated engine with `runas`, cannot be killed by an unelevated `dotnetup`. Once its parent is killed it is orphaned, finishes any in-flight `MsiInstallProduct` without rolling back, and skips Burn's unregistration, so running the same bundle again resumes or repairs the installation. Killing also leaves the engine's extracted files in `%TEMP%`. The `InstallerTimedOut` message tells the user that the installer may still be running in the background, to wait for it, and then to run the same command again or repair the installation. A new installer started while the orphaned one is still running fails with `1618` (`InstallerBusy`).
+1. `dotnetup` asks the bundle to cancel by posting `WM_CLOSE` to a window of class `WixStdBA` owned by the bundle's process or one of its descendants. Under `/quiet` or `/passive`, wixstdba's `OnClose` sets the cancellation flag without prompting and, while applying, keeps running so that rollback can occur. The flag is observed through subsequent engine callbacks, not an immediate stop. `Process.CloseMainWindow` is not used because the intended target is the bootstrapper application's window, not the Burn engine's message window.
+2. The installer gets a grace period of 120 seconds to exit. Any exit code other than success after the cancel request is reported as `InstallerTimedOut` (not `OperationCancelled` or `InstallerFailed`); a success exit code during the grace period means the install finished and is treated as success. The grace period is a policy choice, not a bound provided by MSI or Burn.
+3. If the installer has not exited, `dotnetup` attempts to kill its process tree, then waits up to 10 seconds for the root process to exit. This may leave elevated installer work running and does not establish whether rollback completed. The `InstallerTimedOut` message warns that installation may be incomplete and work may still be running in the background. The exact recovery state after forced termination has not been verified; rerunning the command must not be described as guaranteed to resume or repair it.
 
-Each bundle install holds the install-state mutex while its installer runs. For bundle requests, the mutex wait (both before downloading and before committing) is therefore derived from the installer timeout: the timeout plus the grace period plus the termination wait plus a 2-minute margin, and never less than the default 10-minute wait. Installs in an `admin` batch share one timeout, and commits are sequential, so no further coordination is needed.
+Each bundle install holds the install-state mutex while its installer runs, including an automatic `/repair` if post-install validation finds missing files. For bundle requests, the mutex wait (both before downloading and before committing) therefore budgets two installer runs, each with its timeout, grace period, and termination wait, plus a 2-minute margin, and never less than the default 10-minute wait. This budget assumes the holder uses the same timeout as the waiter, as installs in one batch do; it is not a bound on a separate command using a longer timeout.
 
 Not yet verified on a machine: install-mode behavior with the elevated companion, both for the graceful cancel during the MSI phase and for the forced kill.
+
+#### Cancellation and termination limitations
+
+The timeout above is not a guarantee that installation has stopped or that the machine has returned to its original state:
+
+- Cancellation is cooperative. WiX's [`OnClose`](https://github.com/wixtoolset/wix/blob/v5.0.2/src/ext/Bal/stdbas/WixStandardBootstrapperApplication.cpp#L4051-L4084) deliberately keeps the window open during apply to let rollback occur; [`CBootstrapperApplicationBase`](https://github.com/wixtoolset/wix/blob/v5.0.2/src/api/burn/balutil/inc/BootstrapperApplicationBase.h#L1143-L1177) reports cancellation through subsequent callbacks and suppresses further cancellation while rolling back. A blocked callback or long-running action need not honor the request promptly.
+- [MSI rollback](https://learn.microsoft.com/windows/win32/msi/rollback-installation) is additional work, not an immediate release of the installer. It can be disabled, and [custom actions require their own rollback authoring](https://learn.microsoft.com/windows/win32/msi/rollback-custom-actions). A cancellation request or failure exit code alone does not establish that every change was undone.
+- Windows [`TerminateProcess`](https://learn.microsoft.com/windows/win32/api/processthreadsapi/nf-processthreadsapi-terminateprocess) is abrupt termination, not a rollback protocol. [`Process.Kill(true)`](https://learn.microsoft.com/dotnet/api/system.diagnostics.process.kill) may skip descendants it cannot inspect; waiting for the root process does not confirm that its descendants exited. The exact outcome for an elevated Burn companion or Windows Installer service must not be inferred from the bootstrapper's exit.
+- Once the runner returns, the install-state mutex and the artifact's file lock can be released even though machine-level work may still be running. Subsequent installs can encounter a busy installer or state that is still changing.
+
+Recommendation: do not ship the automatic forced-kill fallback as a safe installer timeout. Prefer upstream's wait-to-completion behavior, with Ctrl+C preventing subsequent installs and repairs. A future cancellation feature should request cancellation through a supported installer contract and wait for completion without promising a rollback deadline. A hard deadline would require explicit detached-operation ownership and recovery, not just termination of the bootstrapper.
+
+The [installer runner](../../../../src/Installer/dotnetup.Library/WindowsInstaller/BundleProcessRunner.cs) displays a short cancellation notice above the live progress rows. It overwrites the full width of each notice line so progress-bar fragments do not remain beside the message, including when a narrow terminal wraps it.
 
 https://github.com/dotnet/vscode-dotnet-runtime/blob/f54c68789e1bdfca13e8262045cb41ca6a32aa82/vscode-dotnet-runtime-library/src/Acquisition/WinMacGlobalInstaller.ts#L102 common exit codes are already wrapped into specific user-facing messages that can be translated into `dotnetup` `user` failures. The MVP maps them as follows:
 
 | Result | Handling |
 | --- | --- |
 | `0` | Success. |
-| `3010`, `1641` | Success. A restart is required; `dotnetup` reports this and does not restart. |
+| `3010` | Success. The user must restart to complete the installation; `dotnetup` reports this, does not restart automatically, and skips post-install hostfxr validation. |
+| `1641` | Success. A restart has already been initiated; `dotnetup` reports this and skips post-install hostfxr validation. |
 | `1602`, `1223` (UAC declined) | Cancelled (`OperationCancelled`). |
 | `1618` | Another installation is in progress (`InstallerBusy`). No automatic retry. |
 | `740` | The installer requires elevation (`InstallerFailed`). |
@@ -289,7 +302,7 @@ https://github.com/dotnet/vscode-dotnet-runtime/blob/f54c68789e1bdfca13e8262045c
 | Installer did not start | `ProcessStartFailed`. |
 | Installer did not finish within `--installer-timeout` | `InstallerTimedOut` (see [Installer Timeout](#installer-timeout)). |
 
-After a successful exit, `dotnetup` confirms that the requested version is installed and otherwise fails with `InstallerPostInstallVerificationFailed`.
+After exit code `0`, `dotnetup` confirms that the requested version is installed and otherwise fails with `InstallerPostInstallVerificationFailed`. Exit codes `3010` and `1641` skip this validation because pending file replacements may not be completed until the restart.
 
 Future work: a bounded wait for an interrupted parent that confirms the original installation has ended, re-queries the installation state, and retries at most once only if installation is still needed. If the original operation's status cannot be established, report an actionable failure without launching another installer.
 

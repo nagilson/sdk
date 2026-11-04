@@ -27,8 +27,9 @@ internal class InstallerOrchestratorSingleton
 
     /// <summary>
     /// How long to wait for the install-state mutex. A Windows installer bundle install holds the mutex while the
-    /// installer runs, so a waiter in an admin-mode batch (whose installs share one timeout) must outlast the holder's
-    /// installer timeout, grace period, and termination wait. The wait never drops below the default.
+    /// installer runs, so a waiter in an admin-mode batch (whose installs share one timeout) must outlast both the
+    /// install and a possible repair, including their grace periods and termination waits. The wait never drops
+    /// below the default.
     /// </summary>
     internal static TimeSpan GetInstallStateMutexTimeout(InstallRequestOptions options)
     {
@@ -38,10 +39,10 @@ internal class InstallerOrchestratorSingleton
             return defaultTimeout;
         }
 
-        TimeSpan bundleTimeout = options.InstallerTimeout
+        TimeSpan runTimeout = options.InstallerTimeout
             + BundleProcessRunner.GracePeriod
-            + BundleProcessRunner.TerminationWait
-            + InstallStateMutexMargin;
+            + BundleProcessRunner.TerminationWait;
+        TimeSpan bundleTimeout = runTimeout + runTimeout + InstallStateMutexMargin;
         return bundleTimeout > defaultTimeout ? bundleTimeout : defaultTimeout;
     }
 
@@ -120,7 +121,7 @@ internal class InstallerOrchestratorSingleton
         using var readyQueue = new System.Collections.Concurrent.BlockingCollection<PreparedInstall>();
 
         var downloadTask = Task.Run(() => PrepareConcurrent(requests, batchContext, readyQueue, results, failures, fatalExceptions, installResultCollectionLock));
-        ConsumeConcurrentPreparedInstallsAndCommit(readyQueue, batchContext, CommitPreparedInstall, results, failures, fatalExceptions, installResultCollectionLock);
+        ConsumeConcurrentPreparedInstallsAndCommit(readyQueue, batchContext, prepared => CommitPreparedInstall(prepared), results, failures, fatalExceptions, installResultCollectionLock);
         downloadTask.Wait();
 
         // Fatal (non-DotnetInstallException) errors still abort the batch entirely.
@@ -288,12 +289,7 @@ internal class InstallerOrchestratorSingleton
     {
         var installRequest = resolvedRequest.Request;
         var install = new DotnetInstall(installRequest.InstallRoot, resolvedRequest.ResolvedVersion, installRequest.Component);
-        // Installer bundles lay down shared system installations that dotnetup does not own, so they are never
-        // tracked. InstallWorkflow, the only producer of bundle requests, rejects tracked admin-mode installs.
-        System.Diagnostics.Debug.Assert(
-            installRequest.Options.InstallMechanism != InstallMechanism.WindowsInstallerBundle || installRequest.Options.Untracked,
-            "Installer bundle requests must be untracked.");
-        installationValidator ??= CreateInstallationValidator(installRequest.Options.InstallMechanism);
+        installationValidator ??= CreateInstallationValidator();
 
         alreadyInstalledResult = CheckExistingInstallState(installRequest, install, installationValidator);
         if (alreadyInstalledResult is not null)
@@ -380,7 +376,8 @@ internal class InstallerOrchestratorSingleton
         return request.Options.InstallMechanism switch
         {
             InstallMechanism.WindowsInstallerBundle => new WindowsBundleArtifact(request, version, batchContext, releaseManifest: releaseManifest),
-            _ => new DotnetArchiveExtractor(request, version, releaseManifest, batchContext, cacheDirectory: DotnetupPaths.DownloadCacheDirectory),
+            _ => new DotnetArchiveExtractor(request, version, releaseManifest, batchContext,
+                cacheDirectory: DotnetupPaths.DownloadCacheDirectory),
         };
     }
 
@@ -388,11 +385,7 @@ internal class InstallerOrchestratorSingleton
     /// Creates the validator that checks whether an install exists. Archive installs validate the layout
     /// dotnetup extracted; installer bundle installs ask hostfxr, since the bundle owns the layout.
     /// </summary>
-    internal static IInstallationValidator CreateInstallationValidator(InstallMechanism mechanism) => mechanism switch
-    {
-        InstallMechanism.WindowsInstallerBundle => new HostFxrInstallationValidator(),
-        _ => new ArchiveInstallationValidator(),
-    };
+    internal static IInstallationValidator CreateInstallationValidator() => new InstallationValidator();
 
     /// <summary>
     /// Commits a previously prepared installation: installs the artifact into the target directory
@@ -400,13 +393,14 @@ internal class InstallerOrchestratorSingleton
     /// </summary>
     /// <returns>The installation result.</returns>
 #pragma warning disable CA1822
-    public InstallResult CommitPreparedInstall(PreparedInstall prepared)
+    public InstallResult CommitPreparedInstall(PreparedInstall prepared, IInstallationValidator? installationValidator = null)
     {
         var manifest = prepared.Request.Options.Untracked ? null : new DotnetupSharedManifest(prepared.Request.Options.ManifestPath);
+        bool repaired;
 
         using (var finalizeLock = ModifyInstallStateMutex(prepared.Request.Options))
         {
-            IInstallationValidator validator = CreateInstallationValidator(prepared.Request.Options.InstallMechanism);
+            IInstallationValidator validator = installationValidator ?? CreateInstallationValidator();
             if (manifest?.InstallAlreadyExists(prepared.Install) == true
                 || (prepared.Request.Options.InstallMechanism == InstallMechanism.WindowsInstallerBundle
                     && validator.Validate(prepared.Install)))
@@ -416,10 +410,9 @@ internal class InstallerOrchestratorSingleton
 
             prepared.Artifact.Commit();
 
-            if (!validator.Validate(prepared.Install, out string? validationFailure))
-            {
-                throw CreatePostInstallValidationException(prepared, validationFailure);
-            }
+            repaired = prepared.Artifact.RequiresPostInstallValidation
+                && !validator.Validate(prepared.Install, out string? validationFailure)
+                && RepairOrThrow(prepared, validator, validationFailure);
 
             manifest?.RecordInstallSpec(prepared.Request);
 
@@ -431,9 +424,44 @@ internal class InstallerOrchestratorSingleton
             });
         }
 
-        return new InstallResult(prepared.Install, WasAlreadyInstalled: false);
+        return new InstallResult(prepared.Install, WasAlreadyInstalled: false, Repaired: repaired);
     }
 #pragma warning restore CA1822
+
+    /// <summary>
+    /// Handles an install that reported success without its files: repairs the artifact once and validates
+    /// again. Returns <c>true</c> when the repair fixed the install (a repair that requires a restart skips the
+    /// second validation, as the install would). Throws when the artifact cannot be repaired or the repair
+    /// did not fix it; a failure after a repair was attempted is marked with
+    /// <see cref="ExceptionExtensions.MarkRepairFailed"/> for telemetry.
+    /// </summary>
+    private static bool RepairOrThrow(PreparedInstall prepared, IInstallationValidator validator, string? validationFailure)
+    {
+        bool repairAttempted;
+        try
+        {
+            repairAttempted = prepared.Artifact.TryRepair();
+        }
+        catch (Exception ex)
+        {
+            ex.MarkRepairFailed();
+            throw;
+        }
+
+        if (repairAttempted
+            && (!prepared.Artifact.RequiresPostInstallValidation || validator.Validate(prepared.Install, out validationFailure)))
+        {
+            return true;
+        }
+
+        DotnetInstallException failure = CreatePostInstallValidationException(prepared, validationFailure);
+        if (repairAttempted)
+        {
+            failure.MarkRepairFailed();
+        }
+
+        throw failure;
+    }
 
     private static DotnetInstallException CreatePostInstallValidationException(PreparedInstall prepared, string? validationFailure)
     {

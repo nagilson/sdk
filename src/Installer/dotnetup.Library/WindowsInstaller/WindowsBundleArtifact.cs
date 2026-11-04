@@ -16,12 +16,15 @@ namespace Microsoft.DotNet.Tools.Bootstrapper.WindowsInstaller;
 /// </summary>
 internal sealed class WindowsBundleArtifact : IInstallArtifact
 {
-    /// <summary>Quiet, per-machine install that never restarts the computer.</summary>
-    internal static IReadOnlyList<string> InstallArguments { get; } = ["/install", "/quiet", "/norestart"];
+    /// <summary>Per-machine install with progress UI that never restarts the computer.</summary>
+    internal static IReadOnlyList<string> InstallArguments { get; } = ["/install", "/passive", "/norestart"];
+
+    /// <summary>Repair with progress UI that never restarts the computer.</summary>
+    internal static IReadOnlyList<string> RepairArguments { get; } = ["/repair", "/passive", "/norestart"];
 
     private readonly DotnetInstallRequest _request;
     private readonly ReleaseVersion _version;
-    private readonly IArchiveDownloader _downloader;
+    private readonly IArtifactDownloader _downloader;
     private readonly IInstallerSignatureVerifier _signatureVerifier;
     private readonly IBundleProcessRunner _processRunner;
     private readonly ExtractorProgressTracker _progress;
@@ -37,14 +40,15 @@ internal sealed class WindowsBundleArtifact : IInstallArtifact
         DotnetInstallRequest request,
         ReleaseVersion version,
         InstallBatchContext batchContext,
-        IArchiveDownloader? downloader = null,
+        IArtifactDownloader? downloader = null,
         IInstallerSignatureVerifier? signatureVerifier = null,
         IBundleProcessRunner? processRunner = null,
         TextWriter? notices = null,
         ReleaseManifest? releaseManifest = null,
-        bool? isPrivilegedProcess = null)
+        DotnetupPolicy? policy = null)
     {
-        _request = request;
+        // Installer bundles are only trusted through the signed releases.json manifest.
+        _request = request with { Options = request.Options with { RequireReleasesJsonSignature = true } };
         _version = version;
         _signatureVerifier = signatureVerifier ?? CreateDefaultSignatureVerifier();
         _processRunner = processRunner ?? new BundleProcessRunner();
@@ -52,30 +56,20 @@ internal sealed class WindowsBundleArtifact : IInstallArtifact
         _batchContext = batchContext;
         _progress = new ExtractorProgressTracker(batchContext.Reporter, request.Component, version.ToString(), batchContext.VersionDisplayWidth);
 
-        UsesSecureScratchDirectory = OperatingSystem.IsWindows() && (isPrivilegedProcess ?? Environment.IsPrivilegedProcess);
-        ScratchDirectory = CreateScratchDirectory();
-
-        // An elevated run keeps its cache inside the admin-only scratch directory. The per-user cache is writable
-        // without elevation, and serving from it would hard-link a user-writable file into the secure directory.
-        _downloader = downloader ?? new DotnetDownloader(
-            releaseManifest ?? ReleaseManifest.Default,
-            cacheDirectory: UsesSecureScratchDirectory ? Path.Combine(ScratchDirectory, "downloadcache") : null);
+        ScratchDirectory = Directory.CreateTempSubdirectory().FullName;
+        _downloader = downloader ?? new DotnetDownloader(releaseManifest ?? ReleaseManifest.Default, policy: policy);
     }
 
     /// <summary>
-    /// Download directory for the bundle. Exposed for testing. Without elevation it is a new directory under the
-    /// per-user temp directory: other users cannot reach it, but it inherits the user's profile ACL, so any process
-    /// running as the same user can write to it. In an elevated process it is created by
-    /// <see cref="SecureScratchDirectory"/>, so only SYSTEM and Administrators can modify it. In both cases the lock
-    /// taken in <see cref="Prepare"/> protects the bundle itself.
+    /// Download directory for the bundle. Exposed for testing. The lock taken in <see cref="Prepare"/> protects the
+    /// bundle itself until installation finishes.
     /// </summary>
     internal string ScratchDirectory { get; }
 
-    /// <summary>Whether <see cref="ScratchDirectory"/> is admin-only. Exposed for testing.</summary>
-    internal bool UsesSecureScratchDirectory { get; }
-
     /// <summary>The downloaded bundle path once <see cref="Prepare"/> has completed. Exposed for testing.</summary>
     internal string? BundlePath => _download?.Path;
+
+    public bool RequiresPostInstallValidation { get; private set; } = true;
 
     public IReadOnlyList<string> ExtractedSubcomponents => [];
 
@@ -107,11 +101,29 @@ internal sealed class WindowsBundleArtifact : IInstallArtifact
         VerifiedDownload download = _download ?? throw new InvalidOperationException("Prepare() must be called before Commit().");
         var installTask = _progress.BeginExtraction();
 
-        EnsureTrustedSignature(download);
-        HandleRunResult(RunInstaller(download.Path));
+        EnsureMicrosoftAuthenticodeSignature(download);
+        HandleRunResult(RunInstaller(download.Path, InstallArguments));
 
         installTask.Value = installTask.MaxValue;
         _progress.CompleteExtraction(installTask);
+    }
+
+    /// <summary>
+    /// Runs the same verified bundle with <c>/repair</c>. The bundle reports success without writing files when
+    /// Windows Installer already has its packages registered (for example, by Visual Studio) but the files were
+    /// deleted; a repair restores them. The bundle must still be present, so this runs before disposal.
+    /// </summary>
+    public bool TryRepair()
+    {
+        // Honor Ctrl+C from the install: start no further installers once the user asked to cancel.
+        if (_download is not VerifiedDownload download || _batchContext.IsCancellationRequested)
+        {
+            return false;
+        }
+
+        _notices.WriteLine(Format(Strings.WindowsInstallerRepairingMissingFiles, Describe()));
+        HandleRunResult(RunInstaller(download.Path, RepairArguments));
+        return true;
     }
 
     public void Dispose()
@@ -135,26 +147,6 @@ internal sealed class WindowsBundleArtifact : IInstallArtifact
             ? new AuthenticodeInstallerSignatureVerifier()
             : UnsupportedPlatformInstallerSignatureVerifier.Instance;
 
-    private string CreateScratchDirectory()
-    {
-        if (!UsesSecureScratchDirectory || !OperatingSystem.IsWindows())
-        {
-            return Directory.CreateTempSubdirectory().FullName;
-        }
-
-        try
-        {
-            return SecureScratchDirectory.Create();
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
-        {
-            throw CreateException(
-                DotnetInstallErrorCode.InstallerFailed,
-                $"Could not create a secure download directory for {Describe()}: {ex.Message}",
-                ex);
-        }
-    }
-
     private VerifiedDownload Download(string basePath, IProgress<DownloadProgress>? reporter)
     {
         try
@@ -169,7 +161,7 @@ internal sealed class WindowsBundleArtifact : IInstallArtifact
         {
             throw CreateException(
                 DotnetInstallErrorCode.DownloadFailed,
-                $"Failed to download the .NET installer for version {_version}: {ex.Message}",
+                Format(Strings.WindowsInstallerDownloadFailed, _version, ex.Message),
                 ex);
         }
     }
@@ -184,7 +176,7 @@ internal sealed class WindowsBundleArtifact : IInstallArtifact
         {
             throw CreateException(
                 DotnetInstallErrorCode.InstallerFailed,
-                $"Could not open the downloaded installer for {Describe()}: {ex.Message}",
+                Format(Strings.WindowsInstallerOpenFailed, Describe(), ex.Message),
                 ex);
         }
     }
@@ -195,7 +187,7 @@ internal sealed class WindowsBundleArtifact : IInstallArtifact
         {
             throw CreateException(
                 DotnetInstallErrorCode.WrongInstallerFileExtension,
-                $"Expected a Windows installer (.exe) for {Describe()}, but the download resolved to '{Path.GetFileName(bundlePath)}'.");
+                Format(Strings.WindowsInstallerWrongFileExtension, Describe(), Path.GetFileName(bundlePath)));
         }
     }
 
@@ -210,42 +202,34 @@ internal sealed class WindowsBundleArtifact : IInstallArtifact
         {
             throw CreateException(
                 DotnetInstallErrorCode.HashMismatch,
-                $"The downloaded installer for {Describe()} does not match its expected hash; it may have been modified after it was downloaded. Run the command again.");
+                Format(Strings.WindowsInstallerHashMismatch, Describe()));
         }
     }
 
-    private void EnsureTrustedSignature(VerifiedDownload download)
+    private void EnsureMicrosoftAuthenticodeSignature(VerifiedDownload download)
     {
         InstallerSignatureResult result = _signatureVerifier.Verify(download.Path);
-        if (result.IsTrusted || IsUnsignedSourceAllowed(download))
+        if (result.IsTrusted)
         {
             return;
         }
 
         throw CreateException(
             DotnetInstallErrorCode.SignatureVerificationFailed,
-            $"The installer for {Describe()} failed Authenticode signature verification: {result.FailureReason}");
+            Format(Strings.WindowsInstallerSignatureVerificationFailed, Describe(), result.FailureReason));
     }
 
-    /// <summary>
-    /// Installers from the blob feed are not Authenticode signed. Their SHA-512 hash was verified during
-    /// download and the user was warned up front, so they may run unless IT policy blocks unsigned downloads.
-    /// Installers resolved from the signed releases manifest must always pass Authenticode, whatever the channel.
-    /// </summary>
-    private static bool IsUnsignedSourceAllowed(VerifiedDownload download) =>
-        download.IsUnsigned && !UnsignedSourcePolicy.IsUnsignedDownloadBlocked();
-
-    private BundleRunResult RunInstaller(string bundlePath)
+    private BundleRunResult RunInstaller(string bundlePath, IReadOnlyList<string> arguments)
     {
         try
         {
-            return _processRunner.Run(bundlePath, InstallArguments, _request.Options.InstallerTimeout, _batchContext.RequestCancellation);
+            return _processRunner.Run(bundlePath, arguments, _request.Options.InstallerTimeout, _batchContext.RequestCancellation);
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or IOException or PlatformNotSupportedException)
         {
             throw CreateException(
                 DotnetInstallErrorCode.ProcessStartFailed,
-                $"Could not start the installer for {Describe()}: {ex.Message}",
+                Format(Strings.WindowsInstallerProcessStartFailed, Describe(), ex.Message),
                 ex);
         }
     }
@@ -264,7 +248,9 @@ internal sealed class WindowsBundleArtifact : IInstallArtifact
     }
 
     private static bool IsSuccess(int exitCode) =>
-        BundleExitCodes.Classify(exitCode) is BundleExitOutcome.Success or BundleExitOutcome.SuccessRestartRequired;
+        BundleExitCodes.Classify(exitCode) is BundleExitOutcome.Success
+            or BundleExitOutcome.SuccessRestartRequired
+            or BundleExitOutcome.SuccessRestartInitiated;
 
     private DotnetInstallException CreateTimeoutException(BundleRunResult result)
     {
@@ -288,7 +274,15 @@ internal sealed class WindowsBundleArtifact : IInstallArtifact
 
         if (outcome == BundleExitOutcome.SuccessRestartRequired)
         {
-            _notices.WriteLine($"A restart is required to finish installing {Describe()}. dotnetup will not restart your computer; restart it when convenient.");
+            RequiresPostInstallValidation = false;
+            _notices.WriteLine(Format(Strings.WindowsInstallerRestartRequired, Describe()));
+            return;
+        }
+
+        if (outcome == BundleExitOutcome.SuccessRestartInitiated)
+        {
+            RequiresPostInstallValidation = false;
+            _notices.WriteLine(Format(Strings.WindowsInstallerRestartInitiated, Describe()));
             return;
         }
 
@@ -299,19 +293,22 @@ internal sealed class WindowsBundleArtifact : IInstallArtifact
     {
         BundleExitOutcome.Cancelled => CreateException(
             DotnetInstallErrorCode.OperationCancelled,
-            $"The installation of {Describe()} was cancelled (installer exit code {exitCode})."),
+            Format(Strings.WindowsInstallerCancelled, Describe(), exitCode)),
         BundleExitOutcome.Busy => CreateException(
             DotnetInstallErrorCode.InstallerBusy,
-            $"Another installation is already in progress (installer exit code {exitCode}). Wait for it to finish, then run the command again."),
+            Format(Strings.WindowsInstallerBusy, exitCode)),
         BundleExitOutcome.ElevationRequired => CreateException(
             DotnetInstallErrorCode.InstallerFailed,
-            $"The installer for {Describe()} requires administrator privileges but could not elevate (installer exit code {exitCode}). Run the command from an account that can approve the administrator (UAC) prompt."),
+            Format(Strings.WindowsInstallerElevationRequired, Describe(), exitCode)),
         _ => CreateException(
             DotnetInstallErrorCode.InstallerFailed,
-            $"The installer for {Describe()} failed with exit code {exitCode} (0x{exitCode:X8})."),
+            Format(Strings.WindowsInstallerFailed, Describe(), exitCode, exitCode)),
     };
 
     private string Describe() => $"{_request.Component.GetDisplayName()} {_version}";
+
+    private static string Format(string format, params object?[] args) =>
+        string.Format(CultureInfo.CurrentCulture, format, args);
 
     private DotnetInstallException CreateException(DotnetInstallErrorCode errorCode, string message, Exception? innerException = null) =>
         innerException is null

@@ -6,6 +6,7 @@ using Microsoft.Dotnet.Installation;
 using Microsoft.DotNet.Tools.Bootstrapper;
 using Microsoft.DotNet.Tools.Bootstrapper.Commands.Init.Form;
 using Microsoft.DotNet.Tools.Bootstrapper.Telemetry;
+using Microsoft.DotNet.Tools.Bootstrapper.Tests;
 
 namespace Microsoft.DotNet.Tools.Dotnetup.Tests;
 
@@ -21,30 +22,32 @@ public class AdminAccessModeTests
         DotnetAccessModePolicy.ShouldMigrateSystemInstallsByDefault(DotnetAccessMode.Admin).Should().BeFalse();
     }
 
-    [TestMethod]
-    public void EnvSettingsApplier_RejectsAdmin()
+    [TestMethod, OSCondition(ConditionMode.Exclude, OperatingSystems.Windows)]
+    public void EnvSettingsApplier_AdminOnNonWindows_ThrowsPlatformNotSupported()
     {
         Action act = () => EnvSettingsApplier.Apply(
             DotnetAccessMode.Admin,
             targetDotnetupOnPath: false,
-            observed: null!,
-            environment: null!,
+            observed: ObservedEnvironmentState.Empty,
+            environment: new MockDotnetInstallManager(Path.GetTempPath()),
             dotnetRoot: "dotnet-root");
 
-        act.Should().Throw<InvalidOperationException>();
+        act.Should().Throw<PlatformNotSupportedException>();
     }
 
     [TestMethod]
     public void InitFormModel_DescribesAdmin()
     {
-        InitFormModel.AccessModeDescription(DotnetAccessMode.Admin).Should().Contain("shared system folder");
+        InitFormModel.AccessModeDescription(DotnetAccessMode.Admin).Should().Be(
+            "Installs can be managed by other tools alongside dotnetup in a shared system folder.");
+        Microsoft.DotNet.Tools.Bootstrapper.Strings.AccessModeAdminDetails.Should().Be(
+            "Installs .NET with the official Windows installer, which asks for administrator approval.");
     }
 
     [TestMethod]
     [DataRow(DotnetInstallErrorCode.AdminModeCommandNotSupported, ErrorCategory.User)]
     [DataRow(DotnetInstallErrorCode.AdminModeSymbolNotSupported, ErrorCategory.User)]
     [DataRow(DotnetInstallErrorCode.AdminModeRequiresUntracked, ErrorCategory.User)]
-    [DataRow(DotnetInstallErrorCode.AdminModeChangeFailed, ErrorCategory.User)]
     [DataRow(DotnetInstallErrorCode.InstallerBusy, ErrorCategory.User)]
     [DataRow(DotnetInstallErrorCode.InstallerFailed, ErrorCategory.Product)]
     [DataRow(DotnetInstallErrorCode.InstallerPostInstallVerificationFailed, ErrorCategory.Product)]

@@ -9,7 +9,9 @@ using Microsoft.Dotnet.Installation.Internal;
 using Microsoft.DotNet.Tools.Bootstrapper;
 using Microsoft.DotNet.Tools.Bootstrapper.Commands.ElevatedSystemPath;
 using Microsoft.DotNet.Tools.Bootstrapper.Commands.Env;
+using Microsoft.DotNet.Tools.Bootstrapper.Commands.Info;
 using Microsoft.DotNet.Tools.Bootstrapper.Commands.Init;
+using Microsoft.DotNet.Tools.Bootstrapper.Commands.List;
 using Microsoft.DotNet.Tools.Bootstrapper.Commands.Runtime.Install;
 using Microsoft.DotNet.Tools.Bootstrapper.Commands.Sdk.Install;
 using Microsoft.DotNet.Tools.Bootstrapper.Commands.Self;
@@ -20,7 +22,7 @@ namespace Microsoft.DotNet.Tools.Dotnetup.Tests;
 [TestClass]
 public class AdminModeGateTests
 {
-    private static readonly EffectiveAccessMode s_admin = new(DotnetAccessMode.Admin, AccessModeSource.Policy);
+    private static readonly DotnetAccessMode? s_admin = DotnetAccessMode.Admin;
 
     [TestMethod]
     [DataRow(null)]
@@ -29,9 +31,7 @@ public class AdminModeGateTests
     [DataRow((int)DotnetAccessMode.Everywhere)]
     public void Enforce_OutsideAdminMode_IsNoOp(int? accessMode)
     {
-        var mode = accessMode is int value
-            ? new EffectiveAccessMode((DotnetAccessMode)value, AccessModeSource.UserConfig)
-            : EffectiveAccessMode.Unset;
+        DotnetAccessMode? mode = accessMode is int value ? (DotnetAccessMode)value : null;
         var parseResult = Parser.Parse(["sdk", "install", "10.0", "--install-path", "C:\\x"]);
 
         AdminModeGate.Enforce(parseResult, AdminModeSupport.Unsupported, mode);
@@ -51,7 +51,7 @@ public class AdminModeGateTests
 
         ex.ErrorCode.Should().Be(DotnetInstallErrorCode.AdminModeCommandNotSupported);
         ex.Message.Should().Contain($"'{parseResult.CommandResult.Command.Name}'")
-            .And.Contain("dotnetup init --mode <mode>");
+            .And.Contain("dotnetup env set <mode>");
         ex.Message.Should().NotContain("only");
     }
 
@@ -161,9 +161,13 @@ public class AdminModeGateTests
         declaringTypes.Should().BeEquivalentTo(new[]
         {
             typeof(InstallCommand),
-            typeof(InitCommand),
             typeof(EnvSetCommand),
+            typeof(EnvClearCommand),
+            typeof(EnvShowCommand),
             typeof(EnvScriptCommand),
+            typeof(InfoCommand),
+            typeof(InitCommand),
+            typeof(ListCommand),
             typeof(SelfUpdateCommand),
             typeof(ElevatedSystemPathCommand),
         });

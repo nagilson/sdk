@@ -10,7 +10,7 @@ namespace Microsoft.Dotnet.Installation.Internal;
 /// <summary>
 /// Resolves and downloads .NET artifacts with hash verification, including unsigned daily dotnetup builds.
 /// </summary>
-internal class DotnetDownloader : IArchiveDownloader
+internal class DotnetDownloader : IArtifactDownloader
 {
     private const int MaxRetryCount = 3;
     private const int RetryDelayMilliseconds = 1000;
@@ -18,18 +18,24 @@ internal class DotnetDownloader : IArchiveDownloader
     private readonly HttpClient _httpClient;
     private readonly ReleaseManifest _releaseManifest;
     private readonly DownloadCache _downloadCache;
+    private readonly DotnetupPolicy _policy;
 
     public DotnetDownloader()
         : this(ReleaseManifest.Default)
     {
     }
 
-    public DotnetDownloader(ReleaseManifest releaseManifest, HttpClient? httpClient = null, string? cacheDirectory = null)
+    /// <param name="releaseManifest">The release manifest used to resolve signed downloads.</param>
+    /// <param name="httpClient">The HTTP client to use; defaults to the shared process-wide client.</param>
+    /// <param name="cacheDirectory">The download cache directory; defaults to the per-user cache.</param>
+    /// <param name="policy">The machine policy that may block unsigned downloads; defaults to the machine policy.</param>
+    public DotnetDownloader(ReleaseManifest releaseManifest, HttpClient? httpClient = null, string? cacheDirectory = null, DotnetupPolicy? policy = null)
     {
         _releaseManifest = releaseManifest ?? throw new ArgumentNullException(nameof(releaseManifest));
         _downloadCache = new DownloadCache(cacheDirectory);
         // The HttpClient is either the shared process-wide singleton or supplied by the caller; we never own it.
         _httpClient = httpClient ?? DefaultHttpClient.Instance;
+        _policy = policy ?? new DotnetupPolicy();
     }
 
     /// <summary>
@@ -178,44 +184,16 @@ internal class DotnetDownloader : IArchiveDownloader
     public ResolvedDownload ResolveDotnetupDownload(string rid)
         => ResolveDotnetupDownload("daily", rid);
 
-    /// <param name="channel">The release channel to resolve.</param>
-    /// <param name="rid">The runtime identifier of the dotnetup build.</param>
-    /// <param name="replacementSignatureEnforced">
-    /// <c>true</c> when the caller verifies a Microsoft-rooted Authenticode signature on the downloaded
-    /// executable before using it; the unsigned-download policy then does not apply.
-    /// </param>
-    public ResolvedDownload ResolveDotnetupDownload(string channel, string rid, bool replacementSignatureEnforced = false)
+    public ResolvedDownload ResolveDotnetupDownload(string channel, string rid)
     {
-        if (!replacementSignatureEnforced)
-        {
-            ThrowIfUnsignedDownloadBlocked("dotnetup", channel);
-        }
-
+        ThrowIfReleasesJsonSignatureRequired("dotnetup", channel, requireReleasesJsonSignature: false);
         using var resolver = new DailyChannelResolver(_releaseManifest, _httpClient);
         ResolvedDotnetupArtifact resolved = resolver.ResolveDotnetupArtifact(channel, rid);
         var location = BlobFeedUrlBuilder.GetDotnetupFeedLocation(resolved.Version, rid);
         string hash = TryGetHashFromUrl(location.ChecksumUrl, resolved.Version, "dotnetup", requirePinnedUri: true)
             ?? throw new DotnetInstallException(DotnetInstallErrorCode.ArchiveHashMissing, $"No checksum is published for dotnetup {resolved.Version} ({rid}).");
-        return new ResolvedDownload(resolved.ArchiveUri, hash, rid, resolved.Version,
-            IsUnsigned: !replacementSignatureEnforced, IsDotnetup: true);
+        return new ResolvedDownload(resolved.ArchiveUri, hash, rid, resolved.Version, IsUnsigned: true, IsDotnetup: true);
     }
-
-    /// <summary>
-    /// Downloads the archive for the specified installation request and verifies its hash.
-    /// The implementation resolves the appropriate archive format and appends the file extension
-    /// to the provided base path.
-    /// </summary>
-    /// <param name="installRequest">The .NET installation request details</param>
-    /// <param name="resolvedVersion">The resolved version to download</param>
-    /// <param name="destinationBasePath">The local base path (without extension) to save the downloaded file</param>
-    /// <param name="progress">Optional progress reporting</param>
-    /// <returns>The full path of the downloaded archive, including the resolved file extension.</returns>
-    public string DownloadArchiveWithVerification(
-        DotnetInstallRequest installRequest,
-        ReleaseVersion resolvedVersion,
-        string destinationBasePath,
-        IProgress<DownloadProgress>? progress = null)
-        => DownloadVerifiedArtifact(installRequest, resolvedVersion, destinationBasePath, progress).Path;
 
     /// <inheritdoc/>
     public VerifiedDownload DownloadVerifiedArtifact(
@@ -230,7 +208,8 @@ internal class DotnetDownloader : IArchiveDownloader
             new Uri(downloadUrl), expectedHash,
             DotnetupUtilities.GetRuntimeIdentifier(installRequest.InstallRoot.Architecture), resolvedVersion,
             IsUnsigned: downloadUrl.StartsWith(BlobFeedUrlBuilder.ArchiveBaseUrl + "/", StringComparison.Ordinal));
-        string path = DownloadWithVerification(download, destinationBasePath + extension, progress);
+        string path = DownloadWithVerification(download, destinationBasePath + extension, progress,
+            installRequest.Options.RequireReleasesJsonSignature);
         return new VerifiedDownload(path, expectedHash, download.IsUnsigned);
     }
 
@@ -238,6 +217,13 @@ internal class DotnetDownloader : IArchiveDownloader
     /// Downloads and verifies an artifact at the exact destination path, without appending an extension.
     /// </summary>
     public string DownloadWithVerification(ResolvedDownload download, string destinationPath, IProgress<DownloadProgress>? progress = null)
+        => DownloadWithVerification(download, destinationPath, progress, requireReleasesJsonSignature: false);
+
+    private string DownloadWithVerification(
+        ResolvedDownload download,
+        string destinationPath,
+        IProgress<DownloadProgress>? progress,
+        bool requireReleasesJsonSignature)
     {
         ArgumentNullException.ThrowIfNull(download);
         ArgumentException.ThrowIfNullOrEmpty(destinationPath);
@@ -245,9 +231,9 @@ internal class DotnetDownloader : IArchiveDownloader
         {
             throw new DotnetInstallException(DotnetInstallErrorCode.ArchiveHashMissing, "Cannot verify a download without its expected hash.");
         }
-        if (download.IsUnsigned)
+        if (download.IsUnsigned || download.IsDotnetup)
         {
-            ThrowIfUnsignedDownloadBlocked(download.IsDotnetup ? "dotnetup" : ".NET", download.Version.ToString());
+            ThrowIfReleasesJsonSignatureRequired(download.IsDotnetup ? "dotnetup" : ".NET", download.Version.ToString(), requireReleasesJsonSignature);
         }
 
         if (download.IsDotnetup)
@@ -442,7 +428,8 @@ internal class DotnetDownloader : IArchiveDownloader
         // unsigned downloads is emitted up-front by the CLI workflow layer (see
         // InstallExecutor.ExecuteInstalls / UpdateWorkflow.InstallVersion via
         // UnsignedSourcePolicy.MayDownloadUnsigned), so no per-fallback warning is needed here.
-        ThrowIfUnsignedDownloadBlocked(installRequest.Component.ToString(), resolvedVersion.ToString());
+        ThrowIfReleasesJsonSignatureRequired(installRequest.Component.ToString(), resolvedVersion.ToString(),
+            installRequest.Options.RequireReleasesJsonSignature);
 
         string rid = DotnetupUtilities.GetRuntimeIdentifier(installRequest.InstallRoot.Architecture);
         var locationsChecked = new List<string>();
@@ -486,28 +473,39 @@ internal class DotnetDownloader : IArchiveDownloader
     }
 
     /// <summary>
-    /// Downloads and parses a .sha512 hash file. Returns null if the URL 404s
-    /// (the version is not published to the blob feed). Throws for any other error.
+    /// Call before a download that is not covered by the signed releases.json manifest (trusted only by
+    /// its published hash). Throws when the request expects the releases.json signature (admin mode) or
+    /// the machine BlockUnsignedDownloads policy requires it. Authenticode is verified elsewhere.
     /// </summary>
-    private static void ThrowIfUnsignedDownloadBlocked(string component, string version)
+    private void ThrowIfReleasesJsonSignatureRequired(string component, string version, bool requireReleasesJsonSignature)
     {
-        if (UnsignedSourcePolicy.IsUnsignedDownloadBlocked())
+        // Admin mode expects the releases.json signature independently of the machine policy; this may change in the future.
+        if (requireReleasesJsonSignature)
+        {
+            throw new DotnetInstallException(
+                DotnetInstallErrorCode.AdminModeSignatureRequired,
+                Strings.AdminModeSignatureRequired,
+                version: version,
+                component: component);
+        }
+
+        if (_policy.IsUnsignedDownloadBlocked())
         {
             throw new DotnetInstallException(
                 DotnetInstallErrorCode.UnsignedDownloadBlockedByPolicy,
                 string.Format(
                     System.Globalization.CultureInfo.CurrentCulture,
                     Strings.UnsignedDownloadBlockedByPolicy,
-                    component,
-                    version,
-                    UnsignedSourcePolicy.WindowsPolicyKey,
-                    UnsignedSourcePolicy.WindowsPolicyValueName,
-                    UnsignedSourcePolicy.UnixPolicyFile),
+                    UnsignedSourcePolicy.GetPolicyLocationForDisplay()),
                 version: version,
                 component: component);
         }
     }
 
+    /// <summary>
+    /// Downloads and parses a .sha512 hash file. Returns null if the URL 404s
+    /// (the version is not published to the blob feed). Throws for any other error.
+    /// </summary>
     private string? TryGetHashFromUrl(string checksumUrl, ReleaseVersion resolvedVersion, string component, bool requirePinnedUri = false)
     {
         try

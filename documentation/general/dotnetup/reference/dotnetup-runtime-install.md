@@ -36,14 +36,14 @@ only on Windows.
 | Option | Description |
 | --- | --- |
 | `--install-path <INSTALL_PATH>` | Select the installation root. |
-| `--set-default-install [<true\|false>]` | The current parser accepts this option. The current install handler does not apply its environment changes. Use `dotnetup env set` after installation. |
+| `--set-default-install [<true\|false>]` | Accepted for compatibility. This option does not configure environment access. Use `dotnetup env set` after installation. |
 | `--migrate-from-system [<true\|false>]` | Install matching native-architecture runtimes from a system-managed installation into the selected installation root. |
 | `--manifest-path <MANIFEST_PATH>` | Use a custom manifest file. |
 | `--interactive [<true\|false>]` | Allow first-use onboarding to wait for input. |
 | `--no-progress [<true\|false>]` | Disable progress display. |
 | `-v`, `--verbosity <normal\|detailed>` | Set output verbosity. The default is `normal`. |
 | `--require-muxer-update [<true\|false>]` | Fail if the command cannot update the `dotnet` executable. By default, installation continues with a warning. |
-| `--untracked [<true\|false>]` | Install without adding a manifest record. |
+| `--untracked [<true\|false>]` | Install without tracking the requirement. Use a separate root that no tracked installation uses. |
 | `--installer-timeout <MINUTES>` | In admin mode, the number of minutes to wait for each Windows installer (default `10`, from `1` to `1440`). When the timeout elapses, `dotnetup` asks the installer to cancel, which rolls back its changes, and waits up to 120 seconds for the rollback. If the installer has not exited by then, `dotnetup` forcibly terminates it and stops waiting; part of the installer may keep running in the background, and the installation may need to be repaired by running the command again. Archive installs ignore this option. |
 | `-?`, `-h`, `--help` | Show command help. |
 

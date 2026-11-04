@@ -37,7 +37,10 @@ internal abstract class InstallCommand : CommandBase
     public IDotnetEnvironmentManager DotnetEnvironment { get; }
     public ChannelVersionResolver ChannelVersionResolver => _channelVersionResolver.Value;
 
-    protected InstallCommand(ParseResult parseResult, string commandName)
+    protected InstallCommand(
+        ParseResult parseResult,
+        string commandName,
+        IDotnetEnvironmentManager? dotnetEnvironment = null)
         : base(parseResult, commandName)
     {
         InstallPath = parseResult.GetValue(CommonOptions.InstallPathOption);
@@ -56,7 +59,7 @@ internal abstract class InstallCommand : CommandBase
             ? TimeSpan.FromMinutes(parseResult.GetValue(CommonOptions.InstallerTimeoutOption))
             : InstallRequestOptions.DefaultInstallerTimeout;
 
-        DotnetEnvironment = new DotnetEnvironmentManager();
+        DotnetEnvironment = dotnetEnvironment ?? new DotnetEnvironmentManager();
     }
 
     /// <inheritdoc/>

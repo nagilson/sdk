@@ -35,8 +35,7 @@ internal static class InitDefaultsResolver
         var globalJson = ignoreGlobalJson
             ? new GlobalJsonInfo()
             : GlobalJsonModifier.GetGlobalJsonInfo(Environment.CurrentDirectory);
-        var pathResolution = new InstallPathResolver(dotnetEnvironment).Resolve(
-            command.InstallPath, globalJson);
+        var pathResolution = new InstallPathResolver(dotnetEnvironment).Resolve(command.InstallPath, globalJson);
 
         if (preResolvedRequests is { Count: > 0 })
         {
@@ -107,35 +106,37 @@ internal static class InitDefaultsResolver
     /// </summary>
     public static List<ResolvedInstallRequest> ResolveDefaultRequests(
         InstallCommand command,
-        List<ResolvedInstallRequest>? requests)
+        List<ResolvedInstallRequest>? requests,
+        DotnetAccessMode? selectedAccessMode = null)
     {
-        return requests ?? GenerateSdkInstallRequests(command, channel: null);
+        return requests ?? GenerateSdkInstallRequests(command, channel: null, selectedAccessMode);
     }
 
     /// <summary>
     /// Generates a single SDK install request for the given channel (or the default channel when
     /// null), resolving the path, global.json, version, and validation through the install workflow.
     /// </summary>
-    public static List<ResolvedInstallRequest> GenerateSdkInstallRequests(InstallCommand command, string? channel)
+    public static List<ResolvedInstallRequest> GenerateSdkInstallRequests(InstallCommand command, string? channel, DotnetAccessMode? selectedAccessMode = null)
     {
-        return GenerateInstallRequests(command, [new MinimalInstallSpec(InstallComponent.SDK, channel)]);
+        return GenerateInstallRequests(command, [new MinimalInstallSpec(InstallComponent.SDK, channel)], selectedAccessMode);
     }
 
     /// <summary>
-    /// Generates resolved install requests for the supplied component specifications.
+    /// Generates resolved install requests for the supplied component specifications. When
+    /// <paramref name="selectedAccessMode"/> is supplied, it overrides the saved access mode.
     /// </summary>
     public static List<ResolvedInstallRequest> GenerateInstallRequests(
         InstallCommand command,
-        MinimalInstallSpec[] componentSpecs)
+        MinimalInstallSpec[] componentSpecs,
+        DotnetAccessMode? selectedAccessMode = null)
     {
         var workflow = new InstallWorkflow(command);
-        return workflow.GenerateInstallRequests(componentSpecs);
+        return workflow.GenerateInstallRequests(componentSpecs, selectedAccessMode);
     }
 
     /// <summary>
     /// Returns the access mode to select by default without prompting. A configured, supported mode
-    /// takes precedence; admin mode is never preselected because it is only entered explicitly.
-    /// Otherwise, Windows defaults to everywhere mode; other platforms use
+    /// takes precedence. Otherwise, Windows defaults to everywhere mode; other platforms use
     /// terminal-profile mode when a supported shell is available and isolation mode when it is not.
     /// </summary>
     public static DotnetAccessMode GetDefaultAccessMode(
@@ -143,7 +144,6 @@ internal static class InitDefaultsResolver
         DotnetAccessMode? configuredAccessMode = null)
     {
         if (configuredAccessMode is DotnetAccessMode configured &&
-            configured != DotnetAccessMode.Admin &&
             DotnetAccessModePolicy.IsSupportedOnCurrentPlatform(configured))
         {
             return configured;

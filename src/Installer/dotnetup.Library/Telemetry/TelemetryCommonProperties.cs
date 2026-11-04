@@ -41,6 +41,7 @@ internal static class TelemetryCommonProperties
     /// <summary>
     /// Gets common attributes for the OpenTelemetry resource.
     /// </summary>
+    /// <param name="sessionId">The telemetry session ID.</param>
     public static IEnumerable<KeyValuePair<string, object>> GetCommonAttributes(string sessionId)
     {
         var attributes = new Dictionary<string, object>
@@ -81,23 +82,20 @@ internal static class TelemetryCommonProperties
         return attributes;
     }
 
+    // Reports the recorded mode as-is, even one the platform ignores, so hand-edited configs are visible.
     private static void AddAccessModeAttributes(Dictionary<string, object> attributes)
-    {
-        var effective = ResolveAccessModeSafely();
-        attributes[TelemetryTagNames.AccessMode] = GetAccessModeTelemetryValue(effective.Mode);
-        attributes[TelemetryTagNames.AccessModeSource] = GetAccessModeSourceTelemetryValue(effective.Source);
-    }
+        => attributes[TelemetryTagNames.AccessMode] = GetAccessModeTelemetryValue(ReadRecordedAccessModeSafely());
 
-    private static EffectiveAccessMode ResolveAccessModeSafely()
+    private static DotnetAccessMode? ReadRecordedAccessModeSafely()
     {
         try
         {
-            return AccessModeResolver.Resolve() ?? EffectiveAccessMode.Unset;
+            return DotnetupConfig.ReadAccessModeSilently();
         }
         catch
         {
             // Telemetry must never crash the app.
-            return EffectiveAccessMode.Unset;
+            return null;
         }
     }
 
@@ -109,13 +107,6 @@ internal static class TelemetryCommonProperties
         DotnetAccessMode.Everywhere => "everywhere",
         DotnetAccessMode.Admin => "admin",
         _ => "unknown",
-    };
-
-    internal static string GetAccessModeSourceTelemetryValue(AccessModeSource source) => source switch
-    {
-        AccessModeSource.UserConfig => "user_config",
-        AccessModeSource.Policy => "policy",
-        _ => "unset",
     };
 
     /// <summary>
@@ -198,7 +189,7 @@ internal static class TelemetryCommonProperties
         try
         {
             // Reuse the SDK's LLM/agent detection
-            var detector = new LLMEnvironmentDetectorForTelemetry();
+            var detector = new LLMEnvironmentDetectorForTelemetry(environmentProvider: null);
             return detector.GetLLMEnvironment();
         }
         catch

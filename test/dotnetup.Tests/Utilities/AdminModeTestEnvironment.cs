@@ -4,32 +4,41 @@
 using Microsoft.Dotnet.Installation.Internal;
 using Microsoft.DotNet.Tools.Bootstrapper;
 using Microsoft.DotNet.Tools.Dotnetup.Tests.Mocks;
+using Spectre.Console;
 
 namespace Microsoft.DotNet.Tools.Dotnetup.Tests.Utilities;
 
+/// <summary>
+/// A temporary dotnetup data directory plus a machine policy backed by an in-memory store. Pass
+/// <see cref="Policy"/> to the code under test; nothing here replaces process-wide policy state.
+/// </summary>
 internal sealed class AdminModeTestEnvironment : IDisposable
 {
     private readonly TestEnvironment _files = new();
-    private readonly IDotnetupPolicyStore _originalStore = DotnetupPolicy.Store;
-    private readonly Func<EffectiveAccessMode>? _originalAccessModeOverride = AccessModeResolver.OverrideForTesting;
-    private readonly Func<bool>? _originalUnsignedOverride = UnsignedSourcePolicy.OverrideForTesting;
 
     public AdminModeTestEnvironment()
     {
         DotnetupPaths.SetTestDataDirectoryOverride(TempRoot);
-        DotnetupPolicy.Store = Store;
-        AccessModeResolver.OverrideForTesting = null;
-        UnsignedSourcePolicy.OverrideForTesting = null;
+        Policy = new DotnetupPolicy(Store);
     }
 
     public string TempRoot => _files.TempRoot;
+
+    /// <summary>The in-memory machine policy values.</summary>
     public FakeDotnetupPolicyStore Store { get; } = new();
+
+    /// <summary>The policy over <see cref="Store"/>.</summary>
+    public DotnetupPolicy Policy { get; }
+
+    /// <summary>Creates a non-ANSI console that writes to <paramref name="output"/>.</summary>
+    public static IAnsiConsole CreateConsole(StringWriter output) => AnsiConsole.Create(new AnsiConsoleSettings
+    {
+        Out = new AnsiConsoleOutput(output),
+        Ansi = AnsiSupport.No,
+    });
 
     public void Dispose()
     {
-        DotnetupPolicy.Store = _originalStore;
-        AccessModeResolver.OverrideForTesting = _originalAccessModeOverride;
-        UnsignedSourcePolicy.OverrideForTesting = _originalUnsignedOverride;
         DotnetupPaths.ClearTestDataDirectoryOverride();
         _files.Dispose();
     }

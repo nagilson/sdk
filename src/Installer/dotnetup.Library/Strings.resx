@@ -288,17 +288,80 @@
   <data name="ListNoVerifyOptionDescription" xml:space="preserve">
     <value>Skip verifying that each installation is valid.</value>
   </data>
-  <data name="ListHeaderTitle" xml:space="preserve">
-    <value>Installations</value>
-  </data>
-  <data name="ListHeaderSubtitle" xml:space="preserve">
-    <value>(managed by dotnetup)</value>
-  </data>
   <data name="ListNoInstallations" xml:space="preserve">
     <value>(none)</value>
   </data>
-  <data name="ListTotal" xml:space="preserve">
-    <value>Total</value>
+  <data name="ListComponentColumn" xml:space="preserve">
+    <value>Component</value>
+  </data>
+  <data name="ListSpecColumn" xml:space="preserve">
+    <value>Install spec</value>
+  </data>
+  <data name="ListSourceColumn" xml:space="preserve">
+    <value>Source</value>
+  </data>
+  <data name="ListInstalledVersionColumn" xml:space="preserve">
+    <value>Installed version</value>
+  </data>
+  <data name="ListCommandLineSource" xml:space="preserve">
+    <value>Command</value>
+  </data>
+  <data name="ListAspNetCoreRuntimeComponent" xml:space="preserve">
+    <value>ASP.NET Core Runtime</value>
+    <comment>{Locked="ASP.NET Core"}</comment>
+  </data>
+  <data name="ListDesktopRuntimeComponent" xml:space="preserve">
+    <value>.NET Desktop Runtime</value>
+    <comment>{Locked=".NET"}</comment>
+  </data>
+  <data name="ListRuntimeComponent" xml:space="preserve">
+    <value>.NET Runtime</value>
+    <comment>{Locked=".NET"}</comment>
+  </data>
+  <data name="ListNotInstalled" xml:space="preserve">
+    <value>Not installed</value>
+  </data>
+  <data name="ListUnknown" xml:space="preserve">
+    <value>Unknown</value>
+  </data>
+  <data name="ListUnavailable" xml:space="preserve">
+    <value>Unavailable</value>
+  </data>
+  <data name="ListSummary" xml:space="preserve">
+    <value>{0}; {1} ({2}, {3})</value>
+    <comment>Formatted counts including labels: 0: install specs, 1: distinct installations, 2: SDKs, 3: runtimes.</comment>
+  </data>
+  <data name="ListOneSpec" xml:space="preserve">
+    <value>1 install spec</value>
+  </data>
+  <data name="ListSpecCount" xml:space="preserve">
+    <value>{0} install specs</value>
+  </data>
+  <data name="ListOneInstallation" xml:space="preserve">
+    <value>1 installation</value>
+  </data>
+  <data name="ListInstallationCount" xml:space="preserve">
+    <value>{0} installations</value>
+  </data>
+  <data name="ListOneSdk" xml:space="preserve">
+    <value>1 SDK</value>
+  </data>
+  <data name="ListSdkCount" xml:space="preserve">
+    <value>{0} SDKs</value>
+  </data>
+  <data name="ListOneRuntime" xml:space="preserve">
+    <value>1 runtime</value>
+  </data>
+  <data name="ListRuntimeCount" xml:space="preserve">
+    <value>{0} runtimes</value>
+  </data>
+  <data name="ListInvalidInstallation" xml:space="preserve">
+    <value>{0} (invalid)</value>
+    <comment>0: installed version.</comment>
+  </data>
+  <data name="ListValidationError" xml:space="preserve">
+    <value>Warning: {0} {1} is invalid: {2}</value>
+    <comment>0: component, 1: version, 2: validation failure.</comment>
   </data>
   <data name="RootCommandDescription" xml:space="preserve">
     <value>.NET toolchain manager for user level installs.</value>
@@ -380,6 +443,14 @@
   </data>
   <data name="EnvOutcomeDotnetOnlyOnPath" xml:space="preserve">
     <value>dotnet is on your PATH. dotnetup is not.</value>
+  </data>
+  <data name="EnvOutcomeAdminDotnetupOnPath" xml:space="preserve">
+    <value>dotnetup is on your PATH. System .NET PATH configuration is managed by the Windows installer.</value>
+    <comment>{Locked="dotnetup"}{Locked="PATH"}</comment>
+  </data>
+  <data name="EnvOutcomeAdminDotnetupOffPath" xml:space="preserve">
+    <value>dotnetup is not added to your PATH. System .NET PATH configuration is managed by the Windows installer.</value>
+    <comment>{Locked="dotnetup"}{Locked="PATH"}</comment>
   </data>
   <data name="EnvApplyToTerminalPrompt" xml:space="preserve">
     <value>To apply the change to this terminal now, run:
@@ -513,8 +584,16 @@ Or open a new terminal.</value>
     <comment>{Locked="--dotnetup-only"}{Locked="--dotnet"}{Locked="--dotnetup"}</comment>
   </data>
   <data name="AdminModeCommandNotSupported" xml:space="preserve">
-    <value>'{0}' is not available in admin mode. Run 'dotnetup init --mode &lt;mode&gt;' or 'dotnetup env set &lt;mode&gt;' to leave admin mode.</value>
-    <comment>{0} is the command name. {Locked="dotnetup init --mode"}{Locked="dotnetup env set"}</comment>
+    <value>'{0}' is not available in admin mode. Run 'dotnetup env set &lt;mode&gt;' to leave admin mode.</value>
+    <comment>{0} is the command name. {Locked="dotnetup env set"}</comment>
+  </data>
+  <data name="AdminModeListNotSupported" xml:space="preserve">
+    <value>The list command is not yet supported in admin mode. Use 'dotnet --list-sdks', 'dotnet --list-runtimes', or 'dotnet --info' to view system installations.</value>
+    <comment>{Locked="dotnetup"} {Locked="dotnet --list-sdks"} {Locked="dotnet --list-runtimes"} {Locked="dotnet --info"}</comment>
+  </data>
+  <data name="AdminModeInfoInstallationsNotShown" xml:space="preserve">
+    <value>System installations are not yet listed by dotnetup in admin mode. Use 'dotnet --info' to view them.</value>
+    <comment>{Locked="dotnetup"} {Locked="dotnet --info"}</comment>
   </data>
   <data name="AdminModeSymbolNotSupported" xml:space="preserve">
     <value>{0} is not available for '{1}' in admin mode.</value>
@@ -526,105 +605,81 @@ Or open a new terminal.</value>
   <data name="AdminModeArgumentDisplayName" xml:space="preserve">
     <value>The argument '&lt;{0}&gt;'</value>
   </data>
-  <data name="AdminModeWindowsOnly" xml:space="preserve">
-    <value>Admin mode is only supported on Windows.</value>
+  <data name="InitInstallLocation" xml:space="preserve">
+    <value>dotnetup will install .NET SDKs and runtimes in {0}.</value>
+    <comment>{Locked="dotnetup"}{Locked=".NET"} {0} is the install directory path.</comment>
   </data>
-  <data name="AdminModeAlreadyEnabled" xml:space="preserve">
-    <value>Admin mode is already enabled.</value>
+  <data name="InitInstallConfirmation" xml:space="preserve">
+    <value>Install .NET with these settings?</value>
+    <comment>{Locked=".NET"}</comment>
   </data>
-  <data name="AdminModeAlreadyDisabled" xml:space="preserve">
-    <value>Admin mode is already disabled.</value>
+  <data name="InitAcceptAndInstall" xml:space="preserve">
+    <value>Accept and install</value>
   </data>
-  <data name="AdminModeEnabled" xml:space="preserve">
-    <value>Admin mode is enabled.</value>
-  </data>
-  <data name="AdminModeDisabled" xml:space="preserve">
-    <value>Admin mode is disabled.</value>
-  </data>
-  <data name="AdminModeEnablingNotice" xml:space="preserve">
-    <value>Enabling admin mode changes a machine-wide policy that affects all users on this computer.</value>
-  </data>
-  <data name="AdminModeDisablingNotice" xml:space="preserve">
-    <value>Disabling admin mode changes a machine-wide policy that affects all users on this computer.</value>
-  </data>
-  <data name="AdminModeElevationNotice" xml:space="preserve">
-    <value>Windows will ask for administrator permission.</value>
-  </data>
-  <data name="AdminModeChangeCancelled" xml:space="preserve">
-    <value>Elevation was cancelled. Admin mode was not changed.</value>
-  </data>
-  <data name="AdminModeEnableFailed" xml:space="preserve">
-    <value>Failed to enable admin mode: {0}</value>
-  </data>
-  <data name="AdminModeDisableFailed" xml:space="preserve">
-    <value>Failed to disable admin mode: {0}</value>
-  </data>
-  <data name="AdminModeNotEnabled" xml:space="preserve">
-    <value>Admin mode was not enabled. The machine policy did not change, which can happen when it is managed by Group Policy.</value>
-  </data>
-  <data name="AdminModeNotDisabled" xml:space="preserve">
-    <value>Admin mode was not disabled. The machine policy did not change, which can happen when it is managed by Group Policy.</value>
-  </data>
-  <data name="AdminModeActive" xml:space="preserve">
-    <value>Admin mode is active on this machine, so no changes were made.</value>
-  </data>
-  <data name="AdminModeLeaveInstructions" xml:space="preserve">
-    <value>To leave admin mode, run 'dotnetup init --mode &lt;mode&gt;' or 'dotnetup env set &lt;mode&gt;' with 'none', 'shell', or 'everywhere'.</value>
-    <comment>{Locked="dotnetup init --mode"}{Locked="dotnetup env set"}{Locked="none"}{Locked="shell"}{Locked="everywhere"}</comment>
-  </data>
-  <data name="AdminModeInstallNextSteps" xml:space="preserve">
-    <value>Next, install the .NET SDK with 'dotnetup sdk install &lt;version&gt; --untracked'.</value>
-    <comment>{Locked="dotnetup sdk install"}{Locked="--untracked"}</comment>
-  </data>
-  <data name="AdminModeEnablePreview" xml:space="preserve">
-    <value>Admin mode would be enabled for all users on this computer.</value>
-  </data>
-  <data name="AdminModeDisablePreview" xml:space="preserve">
-    <value>Admin mode would be disabled for all users on this computer before setup.</value>
-  </data>
-  <data name="AdminModeAlreadyEnabledNoChanges" xml:space="preserve">
-    <value>Admin mode is already enabled, so no changes were made.</value>
-  </data>
-  <data name="InitAdminModeInstallDescription" xml:space="preserve">
-    <value>Installs .NET with the Windows installer into the shared system folder. Requires elevation.</value>
-  </data>
-  <data name="InitAdminModeSelectionDescription" xml:space="preserve">
-    <value>Changes a machine-wide setting for all users. Choosing it only switches the mode; install .NET afterwards with 'dotnetup sdk install &lt;version&gt; --untracked'.</value>
-    <comment>{Locked="dotnetup sdk install"}{Locked="--untracked"}</comment>
+  <data name="InitMigrationNotSupportedInAdminMode" xml:space="preserve">
+    <value>Not supported in admin mode</value>
   </data>
   <data name="AccessModeAdminDescription" xml:space="preserve">
-    <value>Installs are managed by other tools alongside dotnetup in a shared system folder. Installation is slower and consumes more disk space but supports external central IT management.</value>
+    <value>Installs can be managed by other tools alongside dotnetup in a shared system folder.</value>
   </data>
-  <data name="InitModeOptionDescription" xml:space="preserve">
-    <value>The access mode to set up: {0}.</value>
-    <comment>{0} lists supported command-line mode tokens.</comment>
+  <data name="AccessModeAdminDetails" xml:space="preserve">
+    <value>Installs .NET with the official Windows installer, which asks for administrator approval.</value>
   </data>
-  <data name="InitAdminModeOptionDescription" xml:space="preserve">
-    <value>'admin' only switches this machine to admin mode and does not install .NET.</value>
-    <comment>{Locked="admin"}</comment>
+  <data name="WindowsInstallerDownloadFailed" xml:space="preserve">
+    <value>Failed to download the .NET installer for version {0}: {1}</value>
+    <comment>{0} is the component version. {1} is the download error.</comment>
   </data>
-  <data name="ElevatedSystemPathOperationDescription" xml:space="preserve">
-    <value>The operation to perform: 'insertdotnet', 'removedotnet', 'enableadminmode', or 'disableadminmode'</value>
-    <comment>{Locked="insertdotnet"}{Locked="removedotnet"}{Locked="enableadminmode"}{Locked="disableadminmode"}</comment>
+  <data name="WindowsInstallerOpenFailed" xml:space="preserve">
+    <value>Could not open the downloaded installer for {0}: {1}</value>
+    <comment>{0} is the component display name and version. {1} is the operating system error.</comment>
   </data>
-  <data name="ElevatedSystemPathOutputFileDescription" xml:space="preserve">
-    <value>A file where any output that should be displayed to the user should be written.</value>
+  <data name="WindowsInstallerWrongFileExtension" xml:space="preserve">
+    <value>Expected a Windows installer (.exe) for {0}, but the download resolved to '{1}'.</value>
+    <comment>{Locked=".exe"} {0} is the component display name and version. {1} is the downloaded file name.</comment>
   </data>
-  <data name="ElevatedSystemPathDotnetDirDescription" xml:space="preserve">
-    <value>The dotnet directory to insert into or remove from the system PATH. Required for 'insertdotnet' and 'removedotnet' because the elevated process may run under a different account and cannot recompute the invoking user's directory.</value>
-    <comment>{Locked="PATH"}{Locked="insertdotnet"}{Locked="removedotnet"}</comment>
+  <data name="WindowsInstallerHashMismatch" xml:space="preserve">
+    <value>The downloaded installer for {0} does not match its expected hash; it may have been modified after it was downloaded. Run the command again.</value>
+    <comment>{0} is the component display name and version.</comment>
   </data>
-  <data name="ElevatedSystemPathCommandDescription" xml:space="preserve">
-    <value>Modifies the machine-wide system PATH (requires elevated privileges)</value>
-    <comment>{Locked="PATH"}</comment>
+  <data name="WindowsInstallerSignatureVerificationFailed" xml:space="preserve">
+    <value>The installer for {0} failed Authenticode signature verification: {1}</value>
+    <comment>{Locked="Authenticode"} {0} is the component display name and version. {1} is the signature verification error.</comment>
   </data>
-  <data name="ElevatedSystemPathDotnetDirRequired" xml:space="preserve">
-    <value>The '{0}' operation requires the --dotnet-dir option.</value>
-    <comment>{Locked="--dotnet-dir"}</comment>
+  <data name="WindowsInstallerProcessStartFailed" xml:space="preserve">
+    <value>Could not start the installer for {0}: {1}</value>
+    <comment>{0} is the component display name and version. {1} is the operating system error.</comment>
   </data>
-  <data name="AdminModePreservesUserEnvironment" xml:space="preserve">
-    <value>Your existing shell profiles, user settings, PATH entries, and DOTNET_ROOT are left unchanged. While admin mode is active, dotnetup env script can add dotnetup to PATH but does not activate user-level .NET. Existing environment settings may still take precedence; restart open terminals and review any remaining PATH or DOTNET_ROOT settings if needed.</value>
-    <comment>{Locked="PATH"}{Locked="DOTNET_ROOT"}{Locked="dotnetup env script"}</comment>
+  <data name="WindowsInstallerRepairingMissingFiles" xml:space="preserve">
+    <value>{0} is registered with Windows, but its files are missing. Repairing it with the Windows installer. Approve the administrator prompt if asked.</value>
+    <comment>{0} is the component display name and version.</comment>
+  </data>
+  <data name="WindowsInstallerRestartRequired" xml:space="preserve">
+    <value>You must restart your computer to finish installing {0}. dotnetup will not restart it automatically.</value>
+    <comment>{Locked="dotnetup"} {0} is the component display name and version.</comment>
+  </data>
+  <data name="WindowsInstallerRestartInitiated" xml:space="preserve">
+    <value>A restart has been initiated and is required to finish installing {0}.</value>
+    <comment>{0} is the component display name and version.</comment>
+  </data>
+  <data name="WindowsInstallerCancelled" xml:space="preserve">
+    <value>The installation of {0} was cancelled (installer exit code {1}).</value>
+    <comment>{0} is the component display name and version. {1} is the numeric installer exit code.</comment>
+  </data>
+  <data name="WindowsInstallerCancellationRequested" xml:space="preserve">
+    <value>Cannot cancel this installer. Waiting; skipping remaining installs.</value>
+    <comment>Shown after Ctrl+C while a Windows installer is running. Keep this notice short enough for an 80-column terminal.</comment>
+  </data>
+  <data name="WindowsInstallerBusy" xml:space="preserve">
+    <value>Another installation is already in progress (installer exit code {0}). Wait for it to finish, then run the command again.</value>
+    <comment>{0} is the numeric installer exit code.</comment>
+  </data>
+  <data name="WindowsInstallerElevationRequired" xml:space="preserve">
+    <value>The installer for {0} requires administrator privileges but could not elevate (installer exit code {1}). Run the command from an account that can approve the administrator (UAC) prompt.</value>
+    <comment>{Locked="UAC"} {0} is the component display name and version. {1} is the numeric installer exit code.</comment>
+  </data>
+  <data name="WindowsInstallerFailed" xml:space="preserve">
+    <value>The installer for {0} failed with exit code {1} (0x{2:X8}).</value>
+    <comment>{0} is the component display name and version. {1} and {2} are the decimal and hexadecimal forms of the installer exit code.</comment>
   </data>
   <data name="WindowsInstallerPostInstallVerificationFailed" xml:space="preserve">
     <value>The Windows installer reported success, but the installation could not be verified: {0}</value>

@@ -5,20 +5,21 @@ using Microsoft.Dotnet.Installation.Internal;
 
 namespace Microsoft.DotNet.Tools.Dotnetup.Tests.Mocks;
 
+/// <summary>An in-memory machine policy store.</summary>
 internal sealed class FakeDotnetupPolicyStore : IDotnetupPolicyStore
 {
     public Dictionary<string, bool> Values { get; } = new(StringComparer.Ordinal);
 
-    public List<Dictionary<string, bool>> Writes { get; } = [];
+    /// <summary>When set, every read throws this exception.</summary>
+    public Exception? ReadFailure { get; init; }
 
-    public bool ReadFlag(string valueName) => Values.TryGetValue(valueName, out bool value) && value;
-
-    public void WriteFlags(IReadOnlyDictionary<string, bool> values)
+    public bool ReadFlag(string valueName)
     {
-        Writes.Add(new Dictionary<string, bool>(values));
-        foreach (var (name, value) in values)
+        if (ReadFailure is not null)
         {
-            Values[name] = value;
+            throw ReadFailure;
         }
+
+        return Values.TryGetValue(valueName, out bool value) && value;
     }
 }

@@ -4,9 +4,7 @@
 using System.ComponentModel;
 using System.Globalization;
 using System.Runtime.Versioning;
-using System.Security.AccessControl;
 using System.Security.Cryptography;
-using System.Security.Principal;
 using FluentAssertions;
 using Microsoft.Deployment.DotNet.Releases;
 using Microsoft.Dotnet.Installation;
@@ -27,15 +25,10 @@ public class WindowsBundleArtifactTests : IDisposable
     private const string StableChannel = "10.0.100";
     private readonly LazyProgressReporter _reporter = new(new NullProgressTarget());
     private readonly List<WindowsBundleArtifact> _artifacts = [];
-
-    public WindowsBundleArtifactTests()
-    {
-        UnsignedSourcePolicy.OverrideForTesting = null;
-    }
+    private readonly FakeDotnetupPolicyStore _policyStore = new();
 
     public void Dispose()
     {
-        UnsignedSourcePolicy.OverrideForTesting = null;
         foreach (var artifact in _artifacts)
         {
             artifact.Dispose();
@@ -59,6 +52,18 @@ public class WindowsBundleArtifactTests : IDisposable
     }
 
     [TestMethod]
+    public void Prepare_RequestWithoutExpectation_StillExpectsReleasesJsonSignature()
+    {
+        var downloader = CreateDownloader();
+        var artifact = CreateArtifact(StableChannel, downloader: downloader);
+
+        artifact.Prepare();
+
+        downloader.DownloadCalls.Should().ContainSingle()
+            .Which.Request.Options.RequireReleasesJsonSignature.Should().BeTrue();
+    }
+
+    [TestMethod]
     public void Prepare_NonExeDownload_ThrowsWrongInstallerFileExtension()
     {
         var downloader = CreateDownloader();
@@ -72,7 +77,7 @@ public class WindowsBundleArtifactTests : IDisposable
     }
 
     [TestMethod]
-    public void Commit_RunsBundleQuietlyWithoutRestart()
+    public void Commit_RunsBundlePassivelyWithoutRestart()
     {
         var runner = new FakeRunner(exitCode: 0);
         var artifact = CreateArtifact(StableChannel, runner: runner);
@@ -82,13 +87,53 @@ public class WindowsBundleArtifactTests : IDisposable
 
         runner.Calls.Should().ContainSingle();
         runner.Calls[0].Path.Should().Be(artifact.BundlePath);
-        runner.Calls[0].Arguments.Should().Equal("/install", "/quiet", "/norestart");
+        runner.Calls[0].Arguments.Should().Equal("/install", "/passive", "/norestart");
+    }
+
+    [TestMethod]
+    public void TryRepair_RerunsSameBundlePassivelyWithRepairAndExplains()
+    {
+        var runner = new FakeRunner(exitCode: 0);
+        using var notices = new StringWriter();
+        var artifact = CreateArtifact(StableChannel, runner: runner, notices: notices);
+        artifact.Prepare();
+        artifact.Commit();
+
+        artifact.TryRepair().Should().BeTrue();
+
+        runner.Calls.Should().HaveCount(2);
+        runner.Calls[1].Path.Should().Be(artifact.BundlePath);
+        runner.Calls[1].Arguments.Should().Equal("/repair", "/passive", "/norestart");
+        notices.ToString().Should().Contain(".NET SDK 10.0.100 is registered with Windows, but its files are missing");
+    }
+
+    [TestMethod]
+    public void TryRepair_BeforePrepare_DoesNotRunInstaller()
+    {
+        var runner = new FakeRunner(exitCode: 0);
+        var artifact = CreateArtifact(StableChannel, runner: runner);
+
+        artifact.TryRepair().Should().BeFalse();
+
+        runner.Calls.Should().BeEmpty();
+    }
+
+    [TestMethod]
+    public void TryRepair_FailedExitCode_Throws()
+    {
+        var runner = new FakeRunner(exitCode: 1603);
+        var artifact = CreateArtifact(StableChannel, runner: runner);
+        artifact.Prepare();
+
+        var ex = Assert.ThrowsExactly<DotnetInstallException>(() => artifact.TryRepair());
+
+        ex.ErrorCode.Should().Be(DotnetInstallErrorCode.InstallerFailed);
+        runner.Calls.Should().ContainSingle().Which.Arguments.Should().Equal("/repair", "/passive", "/norestart");
     }
 
     [TestMethod]
     public void Commit_SignatureFailureOnSignedSource_ThrowsAndDoesNotRunInstaller()
     {
-        UnsignedSourcePolicy.OverrideForTesting = () => false;
         var runner = new FakeRunner(exitCode: 0);
         var artifact = CreateArtifact(StableChannel, verifier: FakeVerifier.Untrusted, runner: runner);
         artifact.Prepare();
@@ -96,7 +141,7 @@ public class WindowsBundleArtifactTests : IDisposable
         var ex = Assert.ThrowsExactly<DotnetInstallException>(artifact.Commit);
 
         ex.ErrorCode.Should().Be(DotnetInstallErrorCode.SignatureVerificationFailed);
-        ex.Message.Should().Contain(FakeVerifier.UntrustedReason);
+        ex.Message.Should().Be($"The installer for .NET SDK 10.0.100 failed Authenticode signature verification: {FakeVerifier.UntrustedReason}");
         runner.Calls.Should().BeEmpty();
     }
 
@@ -105,7 +150,6 @@ public class WindowsBundleArtifactTests : IDisposable
     [DataRow("10.0.100-preview.4.25216.37")]
     public void Commit_SignatureFailureOnSignedSourceForPrereleaseChannel_ThrowsAndDoesNotRunInstaller(string channel)
     {
-        UnsignedSourcePolicy.OverrideForTesting = () => false;
         var runner = new FakeRunner(exitCode: 0);
         var artifact = CreateArtifact(channel, downloader: CreateDownloader(isUnsigned: false), verifier: FakeVerifier.Untrusted, runner: runner);
         artifact.Prepare();
@@ -120,22 +164,23 @@ public class WindowsBundleArtifactTests : IDisposable
     [DataRow("daily")]
     [DataRow("10.0.100-preview.4.25216.37")]
     [DataRow(StableChannel)]
-    public void Commit_UnsignedSourceAllowedByPolicy_RunsInstaller(string channel)
+    public void Commit_UnsignedSourceAllowedByPolicy_ThrowsAndDoesNotRunInstaller(string channel)
     {
-        UnsignedSourcePolicy.OverrideForTesting = () => false;
         var runner = new FakeRunner(exitCode: 0);
         var artifact = CreateArtifact(channel, downloader: CreateDownloader(isUnsigned: true), verifier: FakeVerifier.Untrusted, runner: runner);
         artifact.Prepare();
 
-        artifact.Commit();
+        var exception = Assert.ThrowsExactly<DotnetInstallException>(artifact.Commit);
 
-        runner.Calls.Should().ContainSingle();
+        exception.ErrorCode.Should().Be(DotnetInstallErrorCode.SignatureVerificationFailed);
+        exception.Message.Should().Be($"The installer for .NET SDK 10.0.100 failed Authenticode signature verification: {FakeVerifier.UntrustedReason}");
+        runner.Calls.Should().BeEmpty();
     }
 
     [TestMethod]
     public void Commit_UnsignedSourceBlockedByPolicy_ThrowsAndDoesNotRunInstaller()
     {
-        UnsignedSourcePolicy.OverrideForTesting = () => true;
+        _policyStore.Values[DotnetupPolicy.BlockUnsignedDownloadsValueName] = true;
         var runner = new FakeRunner(exitCode: 0);
         var artifact = CreateArtifact("daily", downloader: CreateDownloader(isUnsigned: true), verifier: FakeVerifier.Untrusted, runner: runner);
         artifact.Prepare();
@@ -198,59 +243,11 @@ public class WindowsBundleArtifactTests : IDisposable
     }
 
     [TestMethod]
-    public void Constructor_NotPrivileged_UsesPerUserTempDirectory()
+    public void Constructor_UsesPerUserTempDirectory()
     {
-        var artifact = CreateArtifact(StableChannel, isPrivilegedProcess: false);
+        var artifact = CreateArtifact(StableChannel);
 
-        artifact.UsesSecureScratchDirectory.Should().BeFalse();
         artifact.ScratchDirectory.Should().StartWith(Path.GetTempPath());
-    }
-
-    [TestMethod]
-    [OSCondition(OperatingSystems.Windows)]
-    [SupportedOSPlatform("windows")]
-    public void SecureScratchDirectory_Security_GrantsWriteOnlyToSystemAndAdministrators()
-    {
-        var security = SecureScratchDirectory.CreateSecurity();
-        var administrators = new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null);
-        var system = new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null);
-        const FileSystemRights AnyWrite = FileSystemRights.WriteData | FileSystemRights.AppendData | FileSystemRights.WriteExtendedAttributes
-            | FileSystemRights.WriteAttributes | FileSystemRights.Delete | FileSystemRights.DeleteSubdirectoriesAndFiles
-            | FileSystemRights.ChangePermissions | FileSystemRights.TakeOwnership;
-
-        security.AreAccessRulesProtected.Should().BeTrue("inherited permissions from the parent must not apply");
-        security.GetOwner(typeof(SecurityIdentifier)).Should().Be(administrators);
-        var rules = security.GetAccessRules(includeExplicit: true, includeInherited: true, typeof(SecurityIdentifier)).Cast<FileSystemAccessRule>().ToList();
-        rules.Should().OnlyContain(r => r.AccessControlType == AccessControlType.Allow);
-        rules.Should().Contain(r => r.IdentityReference.Equals(system) && r.FileSystemRights.HasFlag(FileSystemRights.FullControl));
-        rules.Should().Contain(r => r.IdentityReference.Equals(administrators) && r.FileSystemRights.HasFlag(FileSystemRights.FullControl));
-        rules.Where(r => !r.IdentityReference.Equals(system) && !r.IdentityReference.Equals(administrators))
-            .Should().OnlyContain(r => (r.FileSystemRights & AnyWrite) == 0, "no one else may change, rename, or delete what dotnetup runs elevated");
-    }
-
-    [TestMethod]
-    [OSCondition(OperatingSystems.Windows)]
-    [SupportedOSPlatform("windows")]
-    public void Prepare_Privileged_DownloadsIntoAdminOnlyDirectory()
-    {
-        if (!Environment.IsPrivilegedProcess)
-        {
-            Assert.Inconclusive("Creating an Administrators-owned directory requires an elevated test process.");
-        }
-
-        var artifact = CreateArtifact(StableChannel, isPrivilegedProcess: true);
-        artifact.Prepare();
-
-        artifact.UsesSecureScratchDirectory.Should().BeTrue();
-        artifact.ScratchDirectory.Should().StartWith(SecureScratchDirectory.DefaultParentDirectory);
-        artifact.BundlePath.Should().StartWith(artifact.ScratchDirectory);
-        var security = new DirectoryInfo(artifact.ScratchDirectory).GetAccessControl();
-        security.AreAccessRulesProtected.Should().BeTrue();
-        security.GetOwner(typeof(SecurityIdentifier)).Should().Be(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null));
-
-        artifact.Dispose();
-
-        Directory.Exists(artifact.ScratchDirectory).Should().BeFalse();
     }
 
     [TestMethod]
@@ -309,10 +306,10 @@ public class WindowsBundleArtifactTests : IDisposable
     }
 
     [TestMethod]
-    [DataRow(0, false)]
-    [DataRow(3010, true)]
-    [DataRow(1641, true)]
-    public void Commit_SuccessExitCodes_Succeed(int exitCode, bool restartRequired)
+    [DataRow(0, null, true)]
+    [DataRow(3010, "must restart", false)]
+    [DataRow(1641, "restart has been initiated", false)]
+    public void Commit_SuccessExitCodes_Succeed(int exitCode, string? expectedNotice, bool requiresPostInstallValidation)
     {
         using var notices = new StringWriter(CultureInfo.InvariantCulture);
         var artifact = CreateArtifact(StableChannel, runner: new FakeRunner(exitCode), notices: notices);
@@ -320,14 +317,64 @@ public class WindowsBundleArtifactTests : IDisposable
 
         artifact.Commit();
 
-        if (restartRequired)
+        if (expectedNotice is not null)
         {
-            notices.ToString().Should().Contain("restart is required");
+            notices.ToString().Should().Contain(expectedNotice);
         }
         else
         {
             notices.ToString().Should().BeEmpty();
         }
+
+        artifact.RequiresPostInstallValidation.Should().Be(requiresPostInstallValidation);
+    }
+
+    [TestMethod]
+    [DataRow(3010)]
+    [DataRow(1641)]
+    public void CommitPreparedInstall_RestartExitCodes_SkipPostInstallVerification(int exitCode)
+    {
+        var runner = new FakeRunner(exitCode);
+        using var prepared = Prepare(CreateArtifact(StableChannel, runner: runner), StableChannel);
+        var validator = new MockInstallationValidator(validateResult: false);
+
+        var result = InstallerOrchestratorSingleton.Instance.CommitPreparedInstall(prepared, validator);
+
+        result.WasAlreadyInstalled.Should().BeFalse();
+        runner.Calls.Should().ContainSingle();
+        validator.ValidateCalls.Should().Be(1, "only the pre-install check should run while a restart is pending");
+    }
+
+    [TestMethod]
+    [DataRow(3010, "must restart")]
+    [DataRow(1641, "restart has been initiated")]
+    public void CommitPreparedInstall_RepairRequiresRestart_SucceedsAsRepairedWithoutRevalidating(int repairExitCode, string expectedNotice)
+    {
+        using var notices = new StringWriter(CultureInfo.InvariantCulture);
+        var runner = new FakeRunner(exitCode: 0) { RepairExitCode = repairExitCode };
+        using var prepared = Prepare(CreateArtifact(StableChannel, runner: runner, notices: notices), StableChannel);
+        var validator = new MockInstallationValidator(validateResult: false);
+
+        var result = InstallerOrchestratorSingleton.Instance.CommitPreparedInstall(prepared, validator);
+
+        result.Repaired.Should().BeTrue();
+        runner.Calls.Select(call => call.Arguments[0]).Should().Equal("/install", "/repair");
+        notices.ToString().Should().Contain(expectedNotice);
+        validator.ValidateCalls.Should().Be(2, "the pre-install and post-install checks run, but not a post-repair check while a restart is pending");
+    }
+
+    [TestMethod]
+    public void CommitPreparedInstall_CancelledDuringInstallWithMissingFiles_DoesNotRepair()
+    {
+        var runner = new FakeRunner(exitCode: 0) { RequestCancellation = true };
+        using var prepared = Prepare(CreateArtifact(StableChannel, runner: runner), StableChannel);
+        var validator = new MockInstallationValidator(validateResult: false);
+
+        var ex = Assert.ThrowsExactly<DotnetInstallException>(() => InstallerOrchestratorSingleton.Instance.CommitPreparedInstall(prepared, validator));
+
+        ex.ErrorCode.Should().Be(DotnetInstallErrorCode.InstallerPostInstallVerificationFailed);
+        ex.IsRepairFailed().Should().BeFalse("no repair should start after cancellation");
+        runner.Calls.Should().ContainSingle().Which.Arguments.Should().Equal(WindowsBundleArtifact.InstallArguments);
     }
 
     [TestMethod]
@@ -373,6 +420,20 @@ public class WindowsBundleArtifactTests : IDisposable
     }
 
     [TestMethod]
+    public void TryRepair_PassesInstallerTimeoutToRunner()
+    {
+        var runner = new FakeRunner(exitCode: 0);
+        var artifact = CreateArtifact(StableChannel, runner: runner, installerTimeout: TimeSpan.FromMinutes(25));
+        artifact.Prepare();
+
+        artifact.TryRepair().Should().BeTrue();
+
+        var call = runner.Calls.Should().ContainSingle().Which;
+        call.Arguments.Should().Equal(WindowsBundleArtifact.RepairArguments);
+        call.Timeout.Should().Be(TimeSpan.FromMinutes(25));
+    }
+
+    [TestMethod]
     public void Commit_DefaultInstallerTimeout_IsTenMinutes()
     {
         var runner = new FakeRunner(exitCode: 0);
@@ -402,6 +463,7 @@ public class WindowsBundleArtifactTests : IDisposable
     [TestMethod]
     [DataRow(0)]
     [DataRow(3010)]
+    [DataRow(1641)]
     public void Commit_InstallerSucceedsDuringGracePeriod_Succeeds(int exitCode)
     {
         var runner = new FakeRunner(exitCode) { Outcome = BundleRunOutcome.StoppedAfterTimeout };
@@ -494,7 +556,7 @@ public class WindowsBundleArtifactTests : IDisposable
     [TestMethod]
     [DataRow(0, BundleExitOutcome.Success)]
     [DataRow(3010, BundleExitOutcome.SuccessRestartRequired)]
-    [DataRow(1641, BundleExitOutcome.SuccessRestartRequired)]
+    [DataRow(1641, BundleExitOutcome.SuccessRestartInitiated)]
     [DataRow(1602, BundleExitOutcome.Cancelled)]
     [DataRow(1223, BundleExitOutcome.Cancelled)]
     [DataRow(1618, BundleExitOutcome.Busy)]
@@ -544,7 +606,6 @@ public class WindowsBundleArtifactTests : IDisposable
         FakeRunner? runner = null,
         TextWriter? notices = null,
         InstallBatchContext? batchContext = null,
-        bool isPrivilegedProcess = false,
         TimeSpan? installerTimeout = null)
     {
         var artifact = new WindowsBundleArtifact(
@@ -555,7 +616,7 @@ public class WindowsBundleArtifactTests : IDisposable
             verifier ?? FakeVerifier.Trusted,
             runner ?? new FakeRunner(exitCode: 0),
             notices ?? TextWriter.Null,
-            isPrivilegedProcess: isPrivilegedProcess);
+            policy: new DotnetupPolicy(_policyStore));
         _artifacts.Add(artifact);
         return artifact;
     }
@@ -583,6 +644,9 @@ public class WindowsBundleArtifactTests : IDisposable
         /// <summary>How the simulated run ends; defaults to the installer exiting on its own.</summary>
         public BundleRunOutcome Outcome { get; init; } = BundleRunOutcome.Exited;
 
+        /// <summary>The exit code for <c>/repair</c> runs; defaults to the install exit code.</summary>
+        public int? RepairExitCode { get; init; }
+
         public BundleRunResult Run(string bundlePath, IReadOnlyList<string> arguments, TimeSpan timeout, Action onCancelRequested)
         {
             Calls.Add((bundlePath, arguments, timeout));
@@ -592,8 +656,9 @@ public class WindowsBundleArtifactTests : IDisposable
             }
 
             OnRun?.Invoke(bundlePath);
+            int resultExitCode = arguments.Contains("/repair") && RepairExitCode is int repairExitCode ? repairExitCode : exitCode;
             return Outcome is BundleRunOutcome.Exited or BundleRunOutcome.StoppedAfterTimeout
-                ? new BundleRunResult(Outcome, exitCode)
+                ? new BundleRunResult(Outcome, resultExitCode)
                 : new BundleRunResult(Outcome, ExitCode: null);
         }
     }

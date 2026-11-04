@@ -101,6 +101,13 @@ internal record InstallRequestOptions()
     /// installer. Corresponds to the <c>--installer-timeout</c> CLI option. Archive installs ignore it.
     /// </summary>
     public TimeSpan InstallerTimeout { get; init; } = DefaultInstallerTimeout;
+
+    /// <summary>
+    /// If true, the download must be covered by the signed releases.json manifest; downloads trusted
+    /// only by a published hash (such as daily or blob-feed builds) are rejected. This is separate from
+    /// Authenticode verification and from the machine BlockUnsignedDownloads policy. Set for admin mode installs.
+    /// </summary>
+    public bool RequireReleasesJsonSignature { get; init; }
 }
 
 /// <summary>

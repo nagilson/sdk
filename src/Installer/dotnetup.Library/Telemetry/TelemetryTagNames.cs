@@ -37,6 +37,12 @@ internal static class TelemetryTagNames
     public const string InstallSetDefault = "install.set_default";
     public const string InstallResolvedVersion = "install.resolved_version";
     public const string InstallResult = "install.result";
+
+    /// <summary>
+    /// Set only when an install needed an automatic repair: <c>succeeded:N,failed:M</c> counts installs that
+    /// succeeded because of a repair and installs whose repair did not fix them.
+    /// </summary>
+    public const string InstallRepair = "install.repair";
     public const string InstallMutexLockFailed = "install.mutex_lock_failed";
     public const string InstallMutexLockPhase = "install.mutex_lock_phase";
     public const string InstallMigratingFromAdmin = "install.migrating_from_admin";
@@ -45,7 +51,9 @@ internal static class TelemetryTagNames
 
     // Access mode tags
     public const string AccessMode = "dotnetup.access_mode";
-    public const string AccessModeSource = "dotnetup.access_mode_source";
+
+    /// <summary>The access mode selected in the init form, which can differ from the saved mode in <see cref="AccessMode"/>.</summary>
+    public const string InitSelectedAccessMode = "init.selected_access_mode";
 
     // Environment / config tags
     public const string ConfigCorrupted = "config.corrupted";

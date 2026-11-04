@@ -4,6 +4,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
+using Spectre.Console;
 
 namespace Microsoft.DotNet.Tools.Bootstrapper.WindowsInstaller;
 
@@ -116,11 +117,12 @@ internal sealed class BundleProcessRunner : IBundleProcessRunner
             startInfo.ArgumentList.Add(argument);
         }
 
+        // Print once per installer run; later Ctrl+C presses are swallowed silently.
+        int cancellationReported = 0;
         void WaitForInstaller(object? sender, ConsoleCancelEventArgs e)
         {
             e.Cancel = true;
-            onCancelRequested();
-            Console.Error.WriteLine("The .NET installer is still running and cannot be cancelled from dotnetup. Waiting for it to finish; no further installs will be started...");
+            ReportCancellationOnce(ref cancellationReported, onCancelRequested);
         }
 
         Console.CancelKeyPress += WaitForInstaller;
@@ -211,7 +213,7 @@ internal sealed class BundleProcessRunner : IBundleProcessRunner
     private sealed class SystemBundleProcess(Process process) : IBundleProcess
     {
         public static SystemBundleProcess Start(ProcessStartInfo startInfo) =>
-            new SystemBundleProcess(Process.Start(startInfo)
+            new(Process.Start(startInfo)
                 ?? throw new InvalidOperationException($"The installer '{startInfo.FileName}' did not start."));
 
         public int ExitCode => process.ExitCode;
@@ -224,5 +226,23 @@ internal sealed class BundleProcessRunner : IBundleProcessRunner
         public void Kill(bool entireProcessTree) => process.Kill(entireProcessTree);
 
         public void Dispose() => process.Dispose();
+    }
+
+    internal static void ReportCancellationOnce(ref int reported, Action onCancelRequested)
+    {
+        if (Interlocked.Exchange(ref reported, 1) == 0)
+        {
+            ReportCancellation(onCancelRequested);
+        }
+    }
+
+    internal static void ReportCancellation(Action onCancelRequested)
+    {
+        onCancelRequested();
+        // Overwrite the full progress row so shorter text does not leave parts of its bar behind.
+        AnsiConsole.Write(new Padder(new Text(Strings.WindowsInstallerCancellationRequested), new Padding(0))
+        {
+            Expand = AnsiConsole.Profile.Capabilities.Interactive,
+        });
     }
 }
